@@ -195,10 +195,20 @@ export async function updateRegistrationGroup(registrationId: string, formData: 
     include: { campaign: true },
   })
   const scope = await assertCampaignScope(registration.campaignId)
-  scope.assert(PERMISSIONS.MEMBER_MANAGE)
-
   const groupId = str(formData, 'groupId') || null
-  await prisma.registration.update({ where: { id: registrationId }, data: { groupId } })
+  scope.assert(PERMISSIONS.MEMBER_MANAGE, groupId)
+  // Trưởng nhóm chỉ được kéo người từ nhóm mình quản lý (hoặc chưa có nhóm) sang.
+  if (!scope.isCampaignWide && registration.groupId && !scope.leadGroupIds.includes(registration.groupId)) {
+    throw new Error('Bạn không quản lý nhóm hiện tại của thành viên này.')
+  }
+
+  await prisma.registration.update({
+    where: { id: registrationId },
+    data: {
+      groupId,
+      ...(!scope.isCampaignWide && groupId ? { status: 'APPROVED' as const, decidedAt: new Date(), decidedById: scope.user.id } : {}),
+    },
+  })
   await logAudit(scope.user.id, 'registration.group', {
     entityType: 'Registration',
     entityId: registrationId,
@@ -207,18 +217,41 @@ export async function updateRegistrationGroup(registrationId: string, formData: 
   memberPaths(registration.campaignId, registration.campaign.slug)
 }
 
-/** Chọn nhiều thành viên từ danh sách có sẵn (tick chọn) rồi xếp cùng lúc vào 1 nhóm. */
+/**
+ * Chọn nhiều thành viên từ danh sách có sẵn (tick chọn) rồi xếp cùng lúc vào 1 nhóm.
+ * Admin (toàn sự kiện) xếp/gỡ tự do. Trưởng nhóm chỉ được xếp vào ĐÚNG nhóm mình phụ
+ * trách, và chỉ áp dụng cho ứng viên chưa có nhóm hoặc đã ở trong nhóm của mình — không
+ * "cướp" người từ nhóm khác. Với trưởng nhóm, việc xếp vào nhóm cũng đồng thời duyệt
+ * luôn các đăng ký đang "Chờ duyệt"/"Danh sách chờ".
+ */
 export async function bulkAssignGroup(campaignId: string, formData: FormData) {
   const scope = await assertCampaignScope(campaignId)
-  scope.assert(PERMISSIONS.MEMBER_MANAGE)
-
   const groupId = str(formData, 'groupId') || null
+  scope.assert(PERMISSIONS.MEMBER_MANAGE, groupId)
+
   const ids = formData.getAll('registrationIds').map(String).filter(Boolean)
   if (ids.length === 0) throw new Error('Chưa chọn thành viên nào.')
 
+  const targetIds = scope.isCampaignWide
+    ? ids
+    : (
+        await prisma.registration.findMany({
+          where: {
+            id: { in: ids },
+            campaignId,
+            OR: [{ groupId: null }, { groupId: { in: scope.leadGroupIds } }],
+          },
+          select: { id: true },
+        })
+      ).map((r) => r.id)
+
   const { count } = await prisma.registration.updateMany({
-    where: { id: { in: ids }, campaignId },
-    data: { groupId },
+    where: { id: { in: targetIds }, campaignId },
+    data: {
+      groupId,
+      // Trưởng nhóm tự thêm người vào nhóm mình = đồng thời duyệt luôn.
+      ...(!scope.isCampaignWide && groupId ? { status: 'APPROVED' as const, decidedAt: new Date(), decidedById: scope.user.id } : {}),
+    },
   })
 
   await logAudit(scope.user.id, 'registration.group', {

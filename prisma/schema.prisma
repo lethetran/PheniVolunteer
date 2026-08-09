@@ -108,6 +108,13 @@ enum ImportStatus {
   FAILED
 }
 
+/// Ai được nhắn trong nhóm chat chung của 1 sự kiện
+enum ChatAccess {
+  ADMIN_ONLY // Chỉ admin phụ trách sự kiện
+  ADMIN_AND_LEADS // Admin + trưởng nhóm
+  EVERYONE // Admin + trưởng nhóm + tình nguyện viên đã duyệt
+}
+
 // ---------------------- AUTH.JS -----------------------------
 
 model Account {
@@ -192,6 +199,7 @@ model User {
   createdTasks      Task[]             @relation("TaskCreator")
   posts             Post[]
   createdFields     FieldDefinition[]  @relation("FieldCreator")
+  chatMessages      ChatMessage[]
 
   @@index([role])
   @@index([studentCode])
@@ -222,6 +230,8 @@ model Campaign {
   requireApproval Boolean @default(true) // Admin phải duyệt thành viên
   allowSelfJoin   Boolean @default(true) // TNV tự đăng ký được
 
+  chatAccess ChatAccess @default(ADMIN_AND_LEADS) // Ai được nhắn trong nhóm chat chung
+
   createdById String?
   createdBy   User?    @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
@@ -234,6 +244,7 @@ model Campaign {
   notes         Note[]
   posts         Post[]
   admins        CampaignAdmin[]
+  chatMessages  ChatMessage[]
 
   @@index([status])
   @@index([startAt])
@@ -556,4 +567,19 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------- CHAT NHÓM CHUNG ----------------------
+
+/// Tin nhắn trong nhóm chat chung của 1 sự kiện — ai được nhắn do Campaign.chatAccess quyết định.
+model ChatMessage {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([campaignId, createdAt])
 }

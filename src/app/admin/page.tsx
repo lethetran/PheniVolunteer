@@ -16,7 +16,7 @@ export default async function AdminHomePage() {
   const [pending, registered, volunteerCount, recentLogs] = await Promise.all([
     prisma.registration.count({ where: { campaignId: { in: campaignIds }, status: 'PENDING' } }),
     prisma.registration.count({ where: { campaignId: { in: campaignIds }, status: 'APPROVED' } }),
-    prisma.user.count({ where: { role: 'VOLUNTEER' } }),
+    prisma.user.count({ where: { role: { in: ['VOLUNTEER', 'MANAGER'] } } }),
     user.role === 'ROOT_ADMIN'
       ? prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 8, include: { actor: true } })
       : Promise.resolve([]),

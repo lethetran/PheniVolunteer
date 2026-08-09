@@ -14,7 +14,7 @@ export async function GET() {
   }
 
   const [volunteers, fieldDefs] = await Promise.all([
-    prisma.user.findMany({ where: { role: 'VOLUNTEER' }, orderBy: { createdAt: 'desc' } }),
+    prisma.user.findMany({ where: { role: { in: ['VOLUNTEER', 'MANAGER'] } }, orderBy: { createdAt: 'desc' } }),
     prisma.fieldDefinition.findMany({ where: { scope: 'VOLUNTEER_PROFILE', archived: false }, orderBy: { order: 'asc' } }),
   ])
 

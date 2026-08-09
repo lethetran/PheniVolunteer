@@ -1,13 +1,13 @@
 import { requirePermission } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
-import { PERMISSIONS, hasGlobalPermission } from '@/lib/permissions'
+import { PERMISSIONS, hasGlobalPermission, ROLE_LABELS } from '@/lib/permissions'
 import { PageHeader, Card, CardHeader, CardBody, EmptyState } from '@/components/ui/card'
 import { TextInput } from '@/components/ui/field'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { LinkButton } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { USER_STATUS } from '@/lib/labels'
+import { USER_STATUS, ROLE_TONE } from '@/lib/labels'
 import { FieldManager } from '@/components/fields/field-manager'
 import { importVolunteers } from '@/actions/import'
 
@@ -21,7 +21,8 @@ export default async function VolunteersPage({
 
   const volunteers = await prisma.user.findMany({
     where: {
-      role: 'VOLUNTEER',
+      // Trưởng nhóm (MANAGER) vẫn tính là tình nguyện viên, chỉ có thêm trách nhiệm phụ trách nhóm.
+      role: { in: ['VOLUNTEER', 'MANAGER'] },
       ...(q
         ? {
             OR: [
@@ -95,7 +96,10 @@ export default async function VolunteersPage({
                     </p>
                   </div>
                 </div>
-                <Badge tone={USER_STATUS[v.status].tone}>{USER_STATUS[v.status].label}</Badge>
+                <div className="flex items-center gap-1.5">
+                  {v.role === 'MANAGER' && <Badge tone={ROLE_TONE.MANAGER}>{ROLE_LABELS.MANAGER}</Badge>}
+                  <Badge tone={USER_STATUS[v.status].tone}>{USER_STATUS[v.status].label}</Badge>
+                </div>
               </div>
             ))
           )}

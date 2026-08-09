@@ -8,14 +8,16 @@ import {
   hasGlobalPermission,
 } from '@/lib/permissions'
 import { CAMPAIGN_STATUS } from '@/lib/labels'
+import { CHAT_ACCESS_LABELS } from '@/lib/chat'
 import { toDateTimeLocal } from '@/lib/utils'
 import { Card, CardHeader, CardBody } from '@/components/ui/card'
-import { Field, TextInput, TextArea, CheckboxInput } from '@/components/ui/field'
+import { Field, TextInput, TextArea, SelectInput, CheckboxInput } from '@/components/ui/field'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { updateCampaign, updateCampaignStatus, deleteCampaign } from '@/actions/campaigns'
 import { assignCampaignAdmin, removeCampaignAdmin } from '@/actions/groups'
+import { updateChatAccess } from '@/actions/chat'
 import type { CampaignStatus } from '@prisma/client'
 
 const STATUS_FLOW: CampaignStatus[] = ['DRAFT', 'OPEN', 'CLOSED', 'ONGOING', 'FINISHED', 'ARCHIVED']
@@ -100,6 +102,24 @@ export default async function CampaignSettingsPage({ params }: { params: Promise
               <CheckboxInput name="requireApproval" defaultChecked={c.requireApproval} label="Cần admin duyệt đăng ký" />
             </div>
             <SubmitButton pendingLabel="Đang lưu…">Lưu thay đổi</SubmitButton>
+          </form>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Nhóm chat chung" description="Chọn ai được nhắn tin trong nhóm chat của sự kiện này." />
+        <CardBody>
+          <form action={updateChatAccess.bind(null, id)} className="flex flex-wrap items-end gap-3">
+            <SelectInput name="chatAccess" defaultValue={c.chatAccess} className="w-64">
+              {(Object.entries(CHAT_ACCESS_LABELS) as [string, string][]).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </SelectInput>
+            <SubmitButton size="sm" pendingLabel="Đang lưu…">
+              Lưu
+            </SubmitButton>
           </form>
         </CardBody>
       </Card>

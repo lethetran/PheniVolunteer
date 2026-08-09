@@ -1,6 +1,7 @@
 import { requireCampaignScope } from '@/lib/scope'
 import { PERMISSIONS } from '@/lib/permissions'
 import { CAMPAIGN_STATUS } from '@/lib/labels'
+import { chatAllowed } from '@/lib/chat'
 import { Badge } from '@/components/ui/badge'
 import { CampaignTabs } from '@/components/nav/campaign-tabs'
 
@@ -23,6 +24,8 @@ export default async function CampaignAdminLayout({
   if (scope.canAnywhere(PERMISSIONS.TASK_MANAGE)) tabs.push({ key: 'tasks', label: 'Nhiệm vụ' })
   if (scope.canAnywhere(PERMISSIONS.NOTE_MANAGE)) tabs.push({ key: 'notes', label: 'Ghi chú' })
   if (scope.isCampaignWide) tabs.push({ key: 'posts', label: 'Thông báo' })
+  if (chatAllowed(scope.campaign.chatAccess, { isCampaignWide: scope.isCampaignWide, isGroupLead: scope.isGroupLead, isApprovedMember: false }))
+    tabs.push({ key: 'chat', label: 'Trò chuyện' })
 
   return (
     <div className="space-y-4">

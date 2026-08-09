@@ -12,6 +12,8 @@ import { ActionForm } from '@/components/ui/action-form'
 import { TextArea } from '@/components/ui/field'
 import { FieldInput } from '@/components/fields/field-input'
 import { LinkButton } from '@/components/ui/button'
+import { CampaignChat } from '@/components/campaign/campaign-chat'
+import { chatAllowed } from '@/lib/chat'
 import { joinCampaign, cancelRegistration } from '@/actions/registrations'
 import { updateTaskProgress } from '@/actions/tasks'
 
@@ -157,6 +159,20 @@ export default async function CampaignDetailPage({
               </CardBody>
             </Card>
           )}
+
+          {user &&
+            chatAllowed(campaign.chatAccess, {
+              isCampaignWide: scope?.isCampaignWide ?? false,
+              isGroupLead: scope?.isGroupLead ?? false,
+              isApprovedMember: isApproved,
+            }) && (
+              <Card>
+                <CardHeader title="Nhóm chat chung" />
+                <CardBody>
+                  <CampaignChat campaignId={campaign.id} currentUserId={user.id} />
+                </CardBody>
+              </Card>
+            )}
         </div>
 
         <div className="space-y-6">

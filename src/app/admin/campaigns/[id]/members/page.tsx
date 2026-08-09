@@ -66,8 +66,22 @@ export default async function CampaignMembersPage({
   const totalCount = counts.reduce((s, c) => s + c._count, 0)
 
   const canReviewAnywhere = scope.canAnywhere(PERMISSIONS.REGISTRATION_REVIEW)
-  const canBulkAssign = scope.can(PERMISSIONS.MEMBER_MANAGE)
-  const importJobs = scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE) || canReviewAnywhere
+  const managedGroups = groups.filter((g) => scope.can(PERMISSIONS.MEMBER_MANAGE, g.id))
+  const canBulkAssign = scope.isCampaignWide ? scope.can(PERMISSIONS.MEMBER_MANAGE) : managedGroups.length > 0
+  const bulkGroupOptions = scope.isCampaignWide ? groups : managedGroups
+
+  // Trưởng nhóm (không quản lý toàn sự kiện) được thêm người từ danh sách chung
+  // (chưa xếp nhóm) vào nhóm mình phụ trách — không cần tải file lên nữa.
+  const candidates =
+    !scope.isCampaignWide && managedGroups.length > 0
+      ? await prisma.registration.findMany({
+          where: { campaignId: id, groupId: null, status: { in: ['PENDING', 'APPROVED'] } },
+          include: { user: true, group: true },
+          orderBy: [{ appliedAt: 'desc' }],
+        })
+      : []
+
+  const importJobs = scope.isCampaignWide
     ? await prisma.importJob.findMany({
         where: { campaignId: id, kind: { in: ['CAMPAIGN_MEMBERS', 'APPROVAL_LIST'] } },
         orderBy: { createdAt: 'desc' },
@@ -92,11 +106,13 @@ export default async function CampaignMembersPage({
                 active={statusFilter === s}
               />
             ))}
-            <div className="ml-auto">
-              <LinkButton href={`/admin/campaigns/${id}/members/export`} variant="outline" size="sm">
-                Xuất Excel
-              </LinkButton>
-            </div>
+            {scope.canAnywhere(PERMISSIONS.DATA_EXPORT) && (
+              <div className="ml-auto">
+                <LinkButton href={`/admin/campaigns/${id}/members/export`} variant="outline" size="sm">
+                  Xuất Excel
+                </LinkButton>
+              </div>
+            )}
           </div>
 
           <form method="GET" className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
@@ -128,7 +144,7 @@ export default async function CampaignMembersPage({
         </CardBody>
       </Card>
 
-      {scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE) && (
+      {scope.isCampaignWide && scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE) && (
         <Card>
           <CardHeader
             title="Nhập danh sách thành viên từ Excel"
@@ -137,7 +153,7 @@ export default async function CampaignMembersPage({
           <CardBody>
             <form action={importCampaignMembers.bind(null, id)} className="flex flex-wrap items-end gap-3">
               <input type="file" name="file" accept=".xlsx,.xls,.csv" required className="text-sm" />
-              {scope.isCampaignWide && groups.length > 0 && (
+              {groups.length > 0 && (
                 <SelectInput name="groupId" className="w-48">
                   <option value="">Theo cột "Nhóm" trong file</option>
                   {groups.map((g) => (
@@ -155,11 +171,11 @@ export default async function CampaignMembersPage({
         </Card>
       )}
 
-      {canReviewAnywhere && (
+      {scope.isCampaignWide && canReviewAnywhere && (
         <Card>
           <CardHeader
             title="Nhập danh sách duyệt"
-            description={`Tải lên danh sách MSSV/Email (VD kết quả từ vòng xét duyệt riêng) để gộp thành trạng thái duyệt cuối cùng. Có cột "Kết quả" thì đọc theo đó (Duyệt/Từ chối/Chờ...), không có thì mặc định cả danh sách là "Đã duyệt". Chỉ áp dụng cho người đã có trong danh sách thành viên.`}
+            description={`Tải lên danh sách MSSV/Email (VD kết quả từ vòng phỏng vấn/xét duyệt) để gộp thành trạng thái duyệt cuối cùng, rồi thông báo tới TNV trong danh sách ban đầu. Có cột "Kết quả" thì đọc theo đó (Duyệt/Từ chối/Chờ...), không có thì mặc định cả danh sách là "Đã duyệt".`}
           />
           <CardBody>
             <form action={importApprovalDecisions.bind(null, id)} className="flex flex-wrap items-end gap-3">
@@ -181,28 +197,49 @@ export default async function CampaignMembersPage({
         </Card>
       )}
 
+      {canBulkAssign && bulkGroupOptions.length > 0 && (
+        <form id="bulk-group-form" action={bulkAssignGroup.bind(null, id)} className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-2.5 backdrop-blur">
+          <span className="text-xs font-medium text-brand-700">Đã tích chọn → xếp vào:</span>
+          <SelectInput name="groupId" defaultValue={bulkGroupOptions.length === 1 ? bulkGroupOptions[0].id : ''} className="w-44">
+            {scope.isCampaignWide && <option value="">Bỏ khỏi nhóm</option>}
+            {bulkGroupOptions.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </SelectInput>
+          <SubmitButton size="sm" pendingLabel="Đang xếp…">
+            Xếp vào nhóm
+          </SubmitButton>
+        </form>
+      )}
+
+      {candidates.length > 0 && (
+        <Card>
+          <CardHeader
+            title={`Danh sách chung — chưa xếp nhóm (${candidates.length})`}
+            description="Tích chọn rồi dùng thanh xếp nhóm ở trên để thêm vào nhóm của bạn — thao tác này cũng đồng thời duyệt luôn."
+          />
+          <CardBody className="space-y-2">
+            {candidates.map((reg) => (
+              <MemberRow
+                key={reg.id}
+                reg={reg}
+                groups={groups}
+                trackingFields={trackingFields}
+                regFields={regFields}
+                canReview={false}
+                canManage={false}
+                canChangeGroup={true}
+                canAttendance={false}
+              />
+            ))}
+          </CardBody>
+        </Card>
+      )}
+
       <Card>
-        <CardHeader
-          title={`Thành viên (${registrations.length})`}
-          description={canBulkAssign && groups.length > 0 ? 'Tích chọn thành viên bên dưới rồi xếp cùng lúc vào 1 nhóm.' : undefined}
-          action={
-            canBulkAssign && groups.length > 0 ? (
-              <form id="bulk-group-form" action={bulkAssignGroup.bind(null, id)} className="flex items-center gap-2">
-                <SelectInput name="groupId" defaultValue="" className="w-44">
-                  <option value="">Bỏ khỏi nhóm</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </SelectInput>
-                <SubmitButton size="sm" variant="outline" pendingLabel="Đang xếp…">
-                  Xếp vào nhóm
-                </SubmitButton>
-              </form>
-            ) : undefined
-          }
-        />
+        <CardHeader title={scope.isCampaignWide ? `Thành viên (${registrations.length})` : `Thành viên nhóm của tôi (${registrations.length})`} />
         <CardBody className="space-y-2">
           {registrations.length === 0 ? (
             <EmptyState title="Không tìm thấy thành viên phù hợp" />
@@ -216,7 +253,7 @@ export default async function CampaignMembersPage({
                 regFields={regFields}
                 canReview={scope.can(PERMISSIONS.REGISTRATION_REVIEW, reg.groupId)}
                 canManage={scope.can(PERMISSIONS.MEMBER_MANAGE, reg.groupId)}
-                canChangeGroup={scope.can(PERMISSIONS.MEMBER_MANAGE)}
+                canChangeGroup={scope.can(PERMISSIONS.MEMBER_MANAGE, reg.groupId)}
                 canAttendance={scope.can(PERMISSIONS.ATTENDANCE_MANAGE, reg.groupId)}
               />
             ))
