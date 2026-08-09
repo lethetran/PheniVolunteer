@@ -8,6 +8,7 @@ import { formatRange, formatDateTime } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardBody, PageHeader } from '@/components/ui/card'
 import { SubmitButton } from '@/components/ui/submit-button'
+import { ActionForm } from '@/components/ui/action-form'
 import { TextArea } from '@/components/ui/field'
 import { FieldInput } from '@/components/fields/field-input'
 import { LinkButton } from '@/components/ui/button'
@@ -179,15 +180,15 @@ export default async function CampaignDetailPage({
                   )}
                   {group && <p className="text-sm text-slate-500">Nhóm: {group.name}</p>}
                   {['PENDING', 'APPROVED', 'WAITLIST'].includes(registration.status) && (
-                    <form action={cancelRegistration.bind(null, registration.id)}>
+                    <ActionForm action={cancelRegistration.bind(null, registration.id)}>
                       <SubmitButton variant="outline" className="w-full" pendingLabel="Đang huỷ…">
                         Huỷ đăng ký
                       </SubmitButton>
-                    </form>
+                    </ActionForm>
                   )}
                 </div>
               ) : canJoin ? (
-                <form action={joinCampaign.bind(null, campaign.id)} className="space-y-4">
+                <ActionForm action={joinCampaign.bind(null, campaign.id)} className="space-y-4">
                   {regFieldDefs.map((def) => (
                     <FieldInput key={def.id} def={def} />
                   ))}
@@ -198,7 +199,7 @@ export default async function CampaignDetailPage({
                   <SubmitButton className="w-full" pendingLabel="Đang gửi…">
                     Đăng ký ngay
                   </SubmitButton>
-                </form>
+                </ActionForm>
               ) : (
                 <p className="text-sm text-slate-500">Sự kiện hiện không nhận đăng ký.</p>
               )}

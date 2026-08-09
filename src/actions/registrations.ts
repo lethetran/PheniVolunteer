@@ -19,111 +19,134 @@ function memberPaths(campaignId: string, slug: string) {
   revalidatePath('/dashboard')
 }
 
-export async function joinCampaign(campaignId: string, formData: FormData) {
-  const user = await assertUser()
-  const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } })
+/**
+ * Next.js ẩn message gốc của lỗi throw ra từ Server Action trong bản production
+ * (chỉ còn digest chung chung) — nên hai action tự phục vụ này bắt lỗi và trả về
+ * { error } thay vì throw, để form phía client (dùng ActionForm/useActionState)
+ * hiển thị đúng lý do thất bại cho người dùng.
+ */
+export async function joinCampaign(
+  campaignId: string,
+  _prevState: { error?: string } | undefined,
+  formData: FormData,
+): Promise<{ error?: string } | undefined> {
+  try {
+    const user = await assertUser()
+    const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } })
 
-  if (!campaign.allowSelfJoin) throw new Error('Sự kiện này không nhận đăng ký trực tiếp.')
-  if (campaign.status !== 'OPEN') throw new Error('Sự kiện hiện không mở đăng ký.')
-  const now = new Date()
-  if (campaign.regOpenAt && now < campaign.regOpenAt) throw new Error('Chưa tới thời gian mở đăng ký.')
-  if (campaign.regCloseAt && now > campaign.regCloseAt) throw new Error('Đã hết hạn đăng ký.')
+    if (!campaign.allowSelfJoin) throw new Error('Sự kiện này không nhận đăng ký trực tiếp.')
+    if (campaign.status !== 'OPEN') throw new Error('Sự kiện hiện không mở đăng ký.')
+    const now = new Date()
+    if (campaign.regOpenAt && now < campaign.regOpenAt) throw new Error('Chưa tới thời gian mở đăng ký.')
+    if (campaign.regCloseAt && now > campaign.regCloseAt) throw new Error('Đã hết hạn đăng ký.')
 
-  const existing = await prisma.registration.findUnique({
-    where: { campaignId_userId: { campaignId, userId: user.id } },
-  })
-  if (existing && existing.status !== 'CANCELLED' && existing.status !== 'REJECTED') {
-    throw new Error('Bạn đã đăng ký sự kiện này rồi.')
-  }
-
-  const fieldDefs = await prisma.fieldDefinition.findMany({
-    where: { scope: 'REGISTRATION_FORM', campaignId, archived: false },
-  })
-  const { data, errors } = collectFieldData(fieldDefs, formData)
-  if (errors.length) throw new Error(errors.join(' '))
-
-  let status: RegistrationStatus = campaign.requireApproval ? 'PENDING' : 'APPROVED'
-  if (campaign.capacity) {
-    const approvedCount = await prisma.registration.count({
-      where: { campaignId, status: 'APPROVED' },
+    const existing = await prisma.registration.findUnique({
+      where: { campaignId_userId: { campaignId, userId: user.id } },
     })
-    if (approvedCount >= campaign.capacity) status = 'WAITLIST'
-  }
+    if (existing && existing.status !== 'CANCELLED' && existing.status !== 'REJECTED') {
+      throw new Error('Bạn đã đăng ký sự kiện này rồi.')
+    }
 
-  const registration = await prisma.registration.upsert({
-    where: { campaignId_userId: { campaignId, userId: user.id } },
-    update: {
-      status,
-      formData: toJson(data),
-      motivation: str(formData, 'motivation') ?? null,
-      appliedAt: new Date(),
-      decidedAt: null,
-      decidedById: null,
-      rejectReason: null,
-    },
-    create: {
-      campaignId,
-      userId: user.id,
-      status,
-      formData: toJson(data),
-      motivation: str(formData, 'motivation') ?? null,
-    },
-  })
-
-  await logAudit(user.id, 'registration.apply', {
-    entityType: 'Registration',
-    entityId: registration.id,
-    metadata: { campaignId, status },
-  })
-
-  const admins = await prisma.user.findMany({
-    where: {
-      OR: [
-        { role: 'ROOT_ADMIN' },
-        { campaignAdmins: { some: { campaignId } } },
-        { createdCampaigns: { some: { id: campaignId } } },
-      ],
-    },
-    select: { id: true },
-  })
-  await notifyMany(
-    admins.map((a) => ({
-      userId: a.id,
-      type: 'REGISTRATION_NEW',
-      title: `Đơn đăng ký mới: ${user.name ?? user.email}`,
-      body: `Sự kiện "${campaign.title}" vừa có người đăng ký tham gia.`,
-      link: `/admin/campaigns/${campaignId}/members`,
-      email: false,
-    })),
-  )
-
-  if (status !== 'PENDING') {
-    await notify({
-      userId: user.id,
-      type: 'REGISTRATION_CONFIRMED',
-      title: status === 'WAITLIST' ? `Bạn đang trong danh sách chờ: ${campaign.title}` : `Đăng ký thành công: ${campaign.title}`,
-      link: `/campaigns/${campaign.slug}`,
-      email: { to: user.email },
+    const fieldDefs = await prisma.fieldDefinition.findMany({
+      where: { scope: 'REGISTRATION_FORM', campaignId, archived: false },
     })
-  }
+    const { data, errors } = collectFieldData(fieldDefs, formData)
+    if (errors.length) throw new Error(errors.join(' '))
 
-  memberPaths(campaignId, campaign.slug)
+    let status: RegistrationStatus = campaign.requireApproval ? 'PENDING' : 'APPROVED'
+    if (campaign.capacity) {
+      const approvedCount = await prisma.registration.count({
+        where: { campaignId, status: 'APPROVED' },
+      })
+      if (approvedCount >= campaign.capacity) status = 'WAITLIST'
+    }
+
+    const registration = await prisma.registration.upsert({
+      where: { campaignId_userId: { campaignId, userId: user.id } },
+      update: {
+        status,
+        formData: toJson(data),
+        motivation: str(formData, 'motivation') ?? null,
+        appliedAt: new Date(),
+        decidedAt: null,
+        decidedById: null,
+        rejectReason: null,
+      },
+      create: {
+        campaignId,
+        userId: user.id,
+        status,
+        formData: toJson(data),
+        motivation: str(formData, 'motivation') ?? null,
+      },
+    })
+
+    await logAudit(user.id, 'registration.apply', {
+      entityType: 'Registration',
+      entityId: registration.id,
+      metadata: { campaignId, status },
+    })
+
+    const admins = await prisma.user.findMany({
+      where: {
+        OR: [
+          { role: 'ROOT_ADMIN' },
+          { campaignAdmins: { some: { campaignId } } },
+          { createdCampaigns: { some: { id: campaignId } } },
+        ],
+      },
+      select: { id: true },
+    })
+    await notifyMany(
+      admins.map((a) => ({
+        userId: a.id,
+        type: 'REGISTRATION_NEW',
+        title: `Đơn đăng ký mới: ${user.name ?? user.email}`,
+        body: `Sự kiện "${campaign.title}" vừa có người đăng ký tham gia.`,
+        link: `/admin/campaigns/${campaignId}/members`,
+        email: false,
+      })),
+    )
+
+    if (status !== 'PENDING') {
+      await notify({
+        userId: user.id,
+        type: 'REGISTRATION_CONFIRMED',
+        title: status === 'WAITLIST' ? `Bạn đang trong danh sách chờ: ${campaign.title}` : `Đăng ký thành công: ${campaign.title}`,
+        link: `/campaigns/${campaign.slug}`,
+        email: { to: user.email },
+      })
+    }
+
+    memberPaths(campaignId, campaign.slug)
+    return undefined
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Có lỗi xảy ra, vui lòng thử lại.' }
+  }
 }
 
-export async function cancelRegistration(registrationId: string) {
-  const user = await assertUser()
-  const registration = await prisma.registration.findUniqueOrThrow({
-    where: { id: registrationId },
-    include: { campaign: true },
-  })
-  if (registration.userId !== user.id) throw new Error('Bạn không thể huỷ đăng ký của người khác.')
-  if (!['PENDING', 'APPROVED', 'WAITLIST'].includes(registration.status)) {
-    throw new Error('Không thể huỷ đăng ký ở trạng thái hiện tại.')
-  }
+export async function cancelRegistration(
+  registrationId: string,
+  _prevState: { error?: string } | undefined,
+): Promise<{ error?: string } | undefined> {
+  try {
+    const user = await assertUser()
+    const registration = await prisma.registration.findUniqueOrThrow({
+      where: { id: registrationId },
+      include: { campaign: true },
+    })
+    if (registration.userId !== user.id) throw new Error('Bạn không thể huỷ đăng ký của người khác.')
+    if (!['PENDING', 'APPROVED', 'WAITLIST'].includes(registration.status)) {
+      throw new Error('Không thể huỷ đăng ký ở trạng thái hiện tại.')
+    }
 
-  await prisma.registration.update({ where: { id: registrationId }, data: { status: 'CANCELLED' } })
-  await logAudit(user.id, 'registration.cancel', { entityType: 'Registration', entityId: registrationId })
-  memberPaths(registration.campaignId, registration.campaign.slug)
+    await prisma.registration.update({ where: { id: registrationId }, data: { status: 'CANCELLED' } })
+    await logAudit(user.id, 'registration.cancel', { entityType: 'Registration', entityId: registrationId })
+    memberPaths(registration.campaignId, registration.campaign.slug)
+    return undefined
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Có lỗi xảy ra, vui lòng thử lại.' }
+  }
 }
 
 export async function decideRegistration(registrationId: string, formData: FormData) {
