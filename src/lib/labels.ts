@@ -1,6 +1,7 @@
 import type {
   AttendanceStatus,
   CampaignStatus,
+  ImportStatus,
   NoteSeverity,
   NoteStatus,
   RegistrationStatus,
@@ -55,6 +56,19 @@ export const NOTE_STATUS: Record<NoteStatus, { label: string; tone: Tone }> = {
   OPEN: { label: 'Chưa xử lý', tone: 'amber' },
   IN_PROGRESS: { label: 'Đang xử lý', tone: 'blue' },
   RESOLVED: { label: 'Đã xong', tone: 'green' },
+}
+
+export const IMPORT_STATUS: Record<ImportStatus, { label: string; tone: Tone }> = {
+  PROCESSING: { label: 'Đang xử lý', tone: 'blue' },
+  DONE: { label: 'Thành công', tone: 'green' },
+  PARTIAL: { label: 'Có lỗi một phần', tone: 'amber' },
+  FAILED: { label: 'Thất bại', tone: 'red' },
+}
+
+export const IMPORT_KIND_LABELS: Record<string, string> = {
+  VOLUNTEERS: 'Danh bạ tình nguyện viên',
+  CAMPAIGN_MEMBERS: 'Danh sách thành viên',
+  APPROVAL_LIST: 'Danh sách duyệt',
 }
 
 export const USER_STATUS: Record<UserStatus, { label: string; tone: Tone }> = {

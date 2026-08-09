@@ -16,3 +16,6 @@ uploads
 prisma/dev.db*
 next-env.d.ts
 tsconfig.tsbuildinfo
+.env*
+.agents
+skills-lock.json

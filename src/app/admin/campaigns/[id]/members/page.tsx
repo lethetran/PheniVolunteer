@@ -8,7 +8,8 @@ import { LinkButton } from '@/components/ui/button'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { SelectInput } from '@/components/ui/field'
 import { MemberRow } from '@/components/campaign/member-row'
-import { importCampaignMembers } from '@/actions/import'
+import { ImportJobList } from '@/components/campaign/import-job-list'
+import { importCampaignMembers, importApprovalDecisions } from '@/actions/import'
 import type { RegistrationStatus } from '@prisma/client'
 
 export default async function CampaignMembersPage({
@@ -42,6 +43,15 @@ export default async function CampaignMembersPage({
   const countMap = Object.fromEntries(counts.map((c) => [c.status, c._count])) as Record<RegistrationStatus, number>
   const totalCount = counts.reduce((s, c) => s + c._count, 0)
 
+  const canReviewAnywhere = scope.canAnywhere(PERMISSIONS.REGISTRATION_REVIEW)
+  const importJobs = scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE) || canReviewAnywhere
+    ? await prisma.importJob.findMany({
+        where: { campaignId: id, kind: { in: ['CAMPAIGN_MEMBERS', 'APPROVAL_LIST'] } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      })
+    : []
+
   return (
     <div className="space-y-6">
       <Card>
@@ -60,7 +70,10 @@ export default async function CampaignMembersPage({
 
       {scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE) && (
         <Card>
-          <CardHeader title="Nhập danh sách từ Excel" description="Cột Email là bắt buộc, các cột khác khớp theo tên cột đã cấu hình." />
+          <CardHeader
+            title="Nhập danh sách thành viên từ Excel"
+            description={`Cột "MSSV" dùng để khớp với tài khoản Google của TNV (ưu tiên hơn Email) — cần ít nhất 1 trong 2. Các cột khác (kỹ năng, size áo...) khớp theo tên cột đã cấu hình ở "Cột thông tin". Người mới sẽ ở trạng thái "Chờ duyệt".`}
+          />
           <CardBody>
             <form action={importCampaignMembers.bind(null, id)} className="flex flex-wrap items-end gap-3">
               <input type="file" name="file" accept=".xlsx,.xls,.csv" required className="text-sm" />
@@ -78,6 +91,32 @@ export default async function CampaignMembersPage({
                 Nhập file
               </SubmitButton>
             </form>
+          </CardBody>
+        </Card>
+      )}
+
+      {canReviewAnywhere && (
+        <Card>
+          <CardHeader
+            title="Nhập danh sách duyệt"
+            description={`Tải lên danh sách MSSV/Email (VD kết quả từ vòng xét duyệt riêng) để gộp thành trạng thái duyệt cuối cùng. Có cột "Kết quả" thì đọc theo đó (Duyệt/Từ chối/Chờ...), không có thì mặc định cả danh sách là "Đã duyệt". Chỉ áp dụng cho người đã có trong danh sách thành viên.`}
+          />
+          <CardBody>
+            <form action={importApprovalDecisions.bind(null, id)} className="flex flex-wrap items-end gap-3">
+              <input type="file" name="file" accept=".xlsx,.xls,.csv" required className="text-sm" />
+              <SubmitButton size="sm" variant="outline" pendingLabel="Đang xử lý…">
+                Nhập danh sách duyệt
+              </SubmitButton>
+            </form>
+          </CardBody>
+        </Card>
+      )}
+
+      {importJobs.length > 0 && (
+        <Card>
+          <CardHeader title="Lịch sử nhập file" />
+          <CardBody>
+            <ImportJobList jobs={importJobs} />
           </CardBody>
         </Card>
       )}
