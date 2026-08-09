@@ -131,7 +131,8 @@ export async function reviewTaskProgress(progressId: string, formData: FormData)
     where: { id: progressId },
     data: {
       status,
-      reviewNote: str(formData, 'reviewNote') ?? null,
+      // Nút tích nhanh không gửi kèm reviewNote — giữ nguyên nhận xét cũ trong trường hợp đó.
+      ...(formData.has('reviewNote') ? { reviewNote: str(formData, 'reviewNote') ?? null } : {}),
       completedAt: status === 'DONE' ? new Date() : null,
     },
   })

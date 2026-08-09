@@ -184,6 +184,28 @@ export async function updateRegistrationGroup(registrationId: string, formData: 
   memberPaths(registration.campaignId, registration.campaign.slug)
 }
 
+/** Chọn nhiều thành viên từ danh sách có sẵn (tick chọn) rồi xếp cùng lúc vào 1 nhóm. */
+export async function bulkAssignGroup(campaignId: string, formData: FormData) {
+  const scope = await assertCampaignScope(campaignId)
+  scope.assert(PERMISSIONS.MEMBER_MANAGE)
+
+  const groupId = str(formData, 'groupId') || null
+  const ids = formData.getAll('registrationIds').map(String).filter(Boolean)
+  if (ids.length === 0) throw new Error('Chưa chọn thành viên nào.')
+
+  const { count } = await prisma.registration.updateMany({
+    where: { id: { in: ids }, campaignId },
+    data: { groupId },
+  })
+
+  await logAudit(scope.user.id, 'registration.group', {
+    entityType: 'Campaign',
+    entityId: campaignId,
+    metadata: { bulk: true, count, groupId },
+  })
+  revalidatePath(`/admin/campaigns/${campaignId}/members`)
+}
+
 export async function updateTracking(registrationId: string, formData: FormData) {
   const registration = await prisma.registration.findUniqueOrThrow({
     where: { id: registrationId },

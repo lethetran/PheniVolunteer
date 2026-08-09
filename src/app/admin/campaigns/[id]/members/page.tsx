@@ -6,31 +6,53 @@ import { Card, CardHeader, CardBody, EmptyState } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LinkButton } from '@/components/ui/button'
 import { SubmitButton } from '@/components/ui/submit-button'
-import { SelectInput } from '@/components/ui/field'
+import { SelectInput, TextInput } from '@/components/ui/field'
 import { MemberRow } from '@/components/campaign/member-row'
 import { ImportJobList } from '@/components/campaign/import-job-list'
 import { importCampaignMembers, importApprovalDecisions } from '@/actions/import'
-import type { RegistrationStatus } from '@prisma/client'
+import { bulkAssignGroup } from '@/actions/registrations'
+import type { Prisma, RegistrationStatus } from '@prisma/client'
 
 export default async function CampaignMembersPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ status?: string }>
+  searchParams: Promise<{ status?: string; q?: string; groupId?: string }>
 }) {
   const { id } = await params
-  const { status } = await searchParams
+  const { status, q, groupId } = await searchParams
   const scope = await requireCampaignScope(id)
   if (!scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE) && !scope.canAnywhere(PERMISSIONS.REGISTRATION_REVIEW)) {
     scope.assert(PERMISSIONS.MEMBER_MANAGE)
   }
 
   const statusFilter = status && status in REGISTRATION_STATUS ? (status as RegistrationStatus) : undefined
+  const search = q?.trim()
+  const groupFilter = groupId?.trim()
+
+  const searchWhere: Prisma.RegistrationWhereInput = search
+    ? {
+        user: {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { studentCode: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+      }
+    : {}
+  const groupWhere: Prisma.RegistrationWhereInput =
+    groupFilter === 'none' ? { groupId: null } : groupFilter ? { groupId: groupFilter } : {}
 
   const [registrations, groups, trackingFields, regFields] = await Promise.all([
     prisma.registration.findMany({
-      where: { ...scope.registrationWhere, ...(statusFilter ? { status: statusFilter } : {}) },
+      where: {
+        ...scope.registrationWhere,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...searchWhere,
+        ...groupWhere,
+      },
       include: { user: true, group: true },
       orderBy: [{ appliedAt: 'desc' }],
     }),
@@ -44,6 +66,7 @@ export default async function CampaignMembersPage({
   const totalCount = counts.reduce((s, c) => s + c._count, 0)
 
   const canReviewAnywhere = scope.canAnywhere(PERMISSIONS.REGISTRATION_REVIEW)
+  const canBulkAssign = scope.can(PERMISSIONS.MEMBER_MANAGE)
   const importJobs = scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE) || canReviewAnywhere
     ? await prisma.importJob.findMany({
         where: { campaignId: id, kind: { in: ['CAMPAIGN_MEMBERS', 'APPROVAL_LIST'] } },
@@ -55,16 +78,53 @@ export default async function CampaignMembersPage({
   return (
     <div className="space-y-6">
       <Card>
-        <CardBody className="flex flex-wrap items-center gap-2">
-          <FilterLink id={id} status={undefined} label={`Tất cả (${totalCount})`} active={!statusFilter} />
-          {(Object.keys(REGISTRATION_STATUS) as RegistrationStatus[]).map((s) => (
-            <FilterLink key={s} id={id} status={s} label={`${REGISTRATION_STATUS[s].label} (${countMap[s] ?? 0})`} active={statusFilter === s} />
-          ))}
-          <div className="ml-auto">
-            <LinkButton href={`/admin/campaigns/${id}/members/export`} variant="outline" size="sm">
-              Xuất Excel
-            </LinkButton>
+        <CardBody className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterLink id={id} status={undefined} q={q} groupId={groupId} label={`Tất cả (${totalCount})`} active={!statusFilter} />
+            {(Object.keys(REGISTRATION_STATUS) as RegistrationStatus[]).map((s) => (
+              <FilterLink
+                key={s}
+                id={id}
+                status={s}
+                q={q}
+                groupId={groupId}
+                label={`${REGISTRATION_STATUS[s].label} (${countMap[s] ?? 0})`}
+                active={statusFilter === s}
+              />
+            ))}
+            <div className="ml-auto">
+              <LinkButton href={`/admin/campaigns/${id}/members/export`} variant="outline" size="sm">
+                Xuất Excel
+              </LinkButton>
+            </div>
           </div>
+
+          <form method="GET" className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+            {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
+            <TextInput name="q" defaultValue={q ?? ''} placeholder="Tìm theo tên, email, MSSV…" className="w-56" />
+            {groups.length > 0 && (
+              <SelectInput name="groupId" defaultValue={groupFilter ?? ''} className="w-48">
+                <option value="">Tất cả nhóm</option>
+                <option value="none">Chưa xếp nhóm</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </SelectInput>
+            )}
+            <SubmitButton variant="outline" size="sm" pendingLabel="Đang lọc…">
+              Lọc
+            </SubmitButton>
+            {(search || groupFilter) && (
+              <a
+                href={statusFilter ? `/admin/campaigns/${id}/members?status=${statusFilter}` : `/admin/campaigns/${id}/members`}
+                className="text-xs text-slate-500 hover:underline"
+              >
+                Xoá bộ lọc
+              </a>
+            )}
+          </form>
         </CardBody>
       </Card>
 
@@ -122,10 +182,30 @@ export default async function CampaignMembersPage({
       )}
 
       <Card>
-        <CardHeader title={`Thành viên (${registrations.length})`} />
+        <CardHeader
+          title={`Thành viên (${registrations.length})`}
+          description={canBulkAssign && groups.length > 0 ? 'Tích chọn thành viên bên dưới rồi xếp cùng lúc vào 1 nhóm.' : undefined}
+          action={
+            canBulkAssign && groups.length > 0 ? (
+              <form id="bulk-group-form" action={bulkAssignGroup.bind(null, id)} className="flex items-center gap-2">
+                <SelectInput name="groupId" defaultValue="" className="w-44">
+                  <option value="">Bỏ khỏi nhóm</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </SelectInput>
+                <SubmitButton size="sm" variant="outline" pendingLabel="Đang xếp…">
+                  Xếp vào nhóm
+                </SubmitButton>
+              </form>
+            ) : undefined
+          }
+        />
         <CardBody className="space-y-2">
           {registrations.length === 0 ? (
-            <EmptyState title="Chưa có thành viên nào" />
+            <EmptyState title="Không tìm thấy thành viên phù hợp" />
           ) : (
             registrations.map((reg) => (
               <MemberRow
@@ -150,16 +230,25 @@ export default async function CampaignMembersPage({
 function FilterLink({
   id,
   status,
+  q,
+  groupId,
   label,
   active,
 }: {
   id: string
   status?: string
+  q?: string
+  groupId?: string
   label: string
   active: boolean
 }) {
+  const params = new URLSearchParams()
+  if (status) params.set('status', status)
+  if (q) params.set('q', q)
+  if (groupId) params.set('groupId', groupId)
+  const qs = params.toString()
   return (
-    <a href={status ? `/admin/campaigns/${id}/members?status=${status}` : `/admin/campaigns/${id}/members`}>
+    <a href={`/admin/campaigns/${id}/members${qs ? `?${qs}` : ''}`}>
       <Badge tone={active ? 'blue' : 'gray'} className={active ? 'ring-2 ring-brand-300' : ''}>
         {label}
       </Badge>

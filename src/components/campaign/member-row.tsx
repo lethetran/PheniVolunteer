@@ -40,7 +40,18 @@ export function MemberRow({
   const trackingData = readData(reg.trackingData)
 
   return (
-    <details className="rounded-xl border border-slate-100">
+    <div className="flex items-start gap-2">
+      {canChangeGroup && (
+        <input
+          type="checkbox"
+          name="registrationIds"
+          value={reg.id}
+          form="bulk-group-form"
+          aria-label={`Chọn ${reg.user.name ?? reg.user.email}`}
+          className="mt-4 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-600"
+        />
+      )}
+      <details className="flex-1 rounded-xl border border-slate-100">
       <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3">
         <div className="flex items-center gap-2.5">
           <Avatar name={reg.user.name} email={reg.user.email} image={reg.user.image} size={32} />
@@ -176,6 +187,7 @@ export function MemberRow({
           )}
         </div>
       </div>
-    </details>
+      </details>
+    </div>
   )
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import type { Role, UserStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { assertRoot } from '@/lib/session'
-import { isAllowedEmail } from '@/lib/auth'
+import { isAllowedEmail, provisionUserByEmail } from '@/lib/auth'
 import { ADMIN_GRANTABLE_PERMISSIONS, DEFAULT_ADMIN_PERMISSIONS, type Permission } from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
 import { str } from '@/lib/utils'
@@ -18,15 +18,11 @@ export async function createAdmin(formData: FormData) {
   if (!email) throw new Error('Nhập email cần cấp quyền admin.')
   if (!isAllowedEmail(email)) throw new Error('Email phải thuộc domain của trường.')
 
-  const user = await prisma.user.upsert({
+  // Đảm bảo tài khoản tồn tại (tạo sẵn nếu người này chưa từng đăng nhập), rồi nâng quyền.
+  await provisionUserByEmail(email)
+  const user = await prisma.user.update({
     where: { email },
-    update: { role: 'ADMIN', permissions: DEFAULT_ADMIN_PERMISSIONS, status: 'ACTIVE' },
-    create: {
-      email,
-      name: email.split('@')[0],
-      role: 'ADMIN',
-      permissions: DEFAULT_ADMIN_PERMISSIONS,
-    },
+    data: { role: 'ADMIN', permissions: DEFAULT_ADMIN_PERMISSIONS, status: 'ACTIVE' },
   })
 
   await notify({

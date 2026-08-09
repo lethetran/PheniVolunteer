@@ -7,6 +7,7 @@ import { PERMISSIONS, MANAGER_GRANTABLE_PERMISSIONS, type Permission } from '@/l
 import { logAudit } from '@/lib/audit'
 import { str, num } from '@/lib/utils'
 import { notify } from '@/lib/notify'
+import { isAllowedEmail, provisionUserByEmail } from '@/lib/auth'
 
 function groupPath(campaignId: string) {
   revalidatePath(`/admin/campaigns/${campaignId}/groups`)
@@ -81,8 +82,10 @@ export async function assignGroupLeader(groupId: string, formData: FormData) {
 
   const email = str(formData, 'email')?.toLowerCase()
   if (!email) throw new Error('Nhập email của người được cử làm trưởng nhóm.')
-  const target = await prisma.user.findUnique({ where: { email } })
-  if (!target) throw new Error('Không tìm thấy tài khoản với email này. Người dùng cần đăng nhập hệ thống ít nhất 1 lần.')
+  if (!isAllowedEmail(email)) throw new Error('Email phải thuộc domain của trường.')
+  // Cấp quyền được ngay cả khi người này chưa từng đăng nhập — tài khoản "chờ" sẽ được
+  // tạo sẵn, tên/MSSV thật sẽ tự cập nhật khi họ đăng nhập Google lần đầu.
+  const target = await provisionUserByEmail(email)
 
   const permissions = formData
     .getAll('permissions')
@@ -135,8 +138,8 @@ export async function assignCampaignAdmin(campaignId: string, formData: FormData
 
   const email = str(formData, 'email')?.toLowerCase()
   if (!email) throw new Error('Nhập email của người được cử làm quản lý sự kiện.')
-  const target = await prisma.user.findUnique({ where: { email } })
-  if (!target) throw new Error('Không tìm thấy tài khoản với email này. Người dùng cần đăng nhập hệ thống ít nhất 1 lần.')
+  if (!isAllowedEmail(email)) throw new Error('Email phải thuộc domain của trường.')
+  const target = await provisionUserByEmail(email)
 
   const permissions = formData
     .getAll('permissions')

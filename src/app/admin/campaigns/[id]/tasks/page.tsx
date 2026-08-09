@@ -8,6 +8,7 @@ import { Field, TextInput, TextArea, SelectInput, CheckboxInput } from '@/compon
 import { Badge } from '@/components/ui/badge'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { Avatar } from '@/components/ui/avatar'
+import { QuickTaskToggle } from '@/components/campaign/quick-task-toggle'
 import { createTask, updateTask, deleteTask, reviewTaskProgress } from '@/actions/tasks'
 
 export default async function CampaignTasksPage({ params }: { params: Promise<{ id: string }> }) {
@@ -59,6 +60,9 @@ export default async function CampaignTasksPage({ params }: { params: Promise<{ 
                       <details key={p.id} className="rounded-lg border border-slate-100">
                         <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm">
                           <span className="flex items-center gap-2">
+                            {scope.can(PERMISSIONS.TASK_REVIEW, task.groupId) && (
+                              <QuickTaskToggle progressId={p.id} done={p.status === 'DONE'} />
+                            )}
                             <Avatar name={p.user.name} email={p.user.email} image={p.user.image} size={24} />
                             {p.user.name ?? p.user.email}
                           </span>

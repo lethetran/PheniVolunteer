@@ -32,6 +32,27 @@ export function rootAdminEmails(): string[] {
     .filter(Boolean)
 }
 
+/** Email dạng 21010xxx@st... -> đoán MSSV từ phần trước @. */
+function deriveStudentCode(email: string): string | null {
+  const localPart = email.split('@')[0]
+  return /^\d{6,12}$/.test(localPart) ? localPart : null
+}
+
+/**
+ * Tạo sẵn tài khoản "chờ" cho một email chưa từng đăng nhập, để Admin/Root có thể
+ * cấp quyền (trưởng nhóm, admin sự kiện...) trước khi người đó đăng nhập lần đầu.
+ * Tên tạm lấy từ phần trước @ — sự kiện signIn bên dưới sẽ thay bằng tên thật
+ * (và cập nhật MSSV nếu còn thiếu) ngay khi họ đăng nhập Google.
+ */
+export async function provisionUserByEmail(email: string) {
+  const normalized = email.toLowerCase()
+  const existing = await prisma.user.findUnique({ where: { email: normalized } })
+  if (existing) return existing
+  return prisma.user.create({
+    data: { email: normalized, name: normalized.split('@')[0], studentCode: deriveStudentCode(normalized) },
+  })
+}
+
 const devLoginEnabled = process.env.ALLOW_DEV_LOGIN === 'true'
 
 const providers = []
@@ -127,26 +148,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   events: {
-    async signIn({ user }) {
+    async signIn({ user, profile }) {
       if (!user.email) return
       const email = user.email.toLowerCase()
       const isRoot = rootAdminEmails().includes(email)
-      await prisma.user.update({
+      const current = await prisma.user.findUnique({
         where: { email },
-        data: {
-          lastLoginAt: new Date(),
-          emailVerified: new Date(),
-          ...(isRoot ? { role: 'ROOT_ADMIN' as const, status: 'ACTIVE' as const } : {}),
-        },
-      }).catch(() => {})
+        select: { name: true, studentCode: true },
+      })
+      const placeholderName = email.split('@')[0]
+      // Tên/ảnh thật từ Google — chỉ ghi đè nếu tên hiện tại còn trống hoặc chỉ là
+      // tên tạm được đoán từ email lúc cấp quyền trước (xem provisionUserByEmail).
+      const realName = typeof profile?.name === 'string' ? profile.name : undefined
+      const realImage = typeof profile?.picture === 'string' ? profile.picture : undefined
+
+      await prisma.user
+        .update({
+          where: { email },
+          data: {
+            lastLoginAt: new Date(),
+            emailVerified: new Date(),
+            ...(isRoot ? { role: 'ROOT_ADMIN' as const, status: 'ACTIVE' as const } : {}),
+            ...(realName && (!current?.name || current.name === placeholderName) ? { name: realName } : {}),
+            ...(realImage ? { image: realImage } : {}),
+            ...(!current?.studentCode && deriveStudentCode(email) ? { studentCode: deriveStudentCode(email) } : {}),
+          },
+        })
+        .catch(() => {})
     },
     async createUser({ user }) {
       if (!user.email) return
       const email = user.email.toLowerCase()
-      // Chuẩn hoá email về chữ thường + đoán mã sinh viên từ email dạng 21010xxx@st...
-      const studentCode = /^\d{6,12}$/.test(email.split('@')[0]) ? email.split('@')[0] : null
       await prisma.user
-        .update({ where: { id: user.id }, data: { email, studentCode } })
+        .update({ where: { id: user.id }, data: { email, studentCode: deriveStudentCode(email) } })
         .catch(() => {})
     },
   },
