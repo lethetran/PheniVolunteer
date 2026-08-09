@@ -89,6 +89,13 @@ export default async function CampaignDetailPage({
           </span>
         }
         description={campaign.summary}
+        action={
+          user && (
+            <LinkButton href={`/campaigns/${slug}/members`} variant="outline" size="sm">
+              Danh sách ban tổ chức & TNV
+            </LinkButton>
+          )
+        }
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -185,6 +192,15 @@ export default async function CampaignDetailPage({
                   <LinkButton href={`/login?callbackUrl=/campaigns/${slug}`} className="w-full">
                     Đăng nhập
                   </LinkButton>
+                </div>
+              ) : scope?.isCampaignWide ? (
+                <div className="space-y-2">
+                  <Badge tone="violet" className="text-sm">
+                    Quản trị viên sự kiện
+                  </Badge>
+                  <p className="text-sm text-slate-500">
+                    Bạn phụ trách sự kiện này nên mặc định là thành viên, không cần đăng ký.
+                  </p>
                 </div>
               ) : registration && !canJoin ? (
                 <div className="space-y-3">

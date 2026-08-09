@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { LinkButton } from '@/components/ui/button'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { SelectInput, TextInput } from '@/components/ui/field'
-import { MemberRow } from '@/components/campaign/member-row'
+import { MemberRow, MemberTableHeader } from '@/components/campaign/member-row'
 import { ImportJobList } from '@/components/campaign/import-job-list'
 import { importCampaignMembers, importApprovalDecisions } from '@/actions/import'
 import { bulkAssignGroup } from '@/actions/registrations'
@@ -18,10 +18,10 @@ export default async function CampaignMembersPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ status?: string; q?: string; groupId?: string }>
+  searchParams: Promise<{ status?: string; q?: string; groupId?: string; from?: string; to?: string }>
 }) {
   const { id } = await params
-  const { status, q, groupId } = await searchParams
+  const { status, q, groupId, from, to } = await searchParams
   const scope = await requireCampaignScope(id)
   if (!scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE) && !scope.canAnywhere(PERMISSIONS.REGISTRATION_REVIEW)) {
     scope.assert(PERMISSIONS.MEMBER_MANAGE)
@@ -30,6 +30,8 @@ export default async function CampaignMembersPage({
   const statusFilter = status && status in REGISTRATION_STATUS ? (status as RegistrationStatus) : undefined
   const search = q?.trim()
   const groupFilter = groupId?.trim()
+  const fromRow = from ? Number(from) : undefined
+  const toRow = to ? Number(to) : undefined
 
   const searchWhere: Prisma.RegistrationWhereInput = search
     ? {
@@ -60,6 +62,12 @@ export default async function CampaignMembersPage({
     prisma.fieldDefinition.findMany({ where: { scope: 'MEMBER_TRACKING', campaignId: id, archived: false }, orderBy: { order: 'asc' } }),
     prisma.fieldDefinition.findMany({ where: { scope: 'REGISTRATION_FORM', campaignId: id, archived: false }, orderBy: { order: 'asc' } }),
   ])
+
+  const dynamicFields = [...regFields, ...trackingFields]
+  const numbered = registrations.map((reg, i) => ({ reg, stt: i + 1 }))
+  const rangedRegistrations = numbered.filter(
+    ({ stt }) => (fromRow === undefined || stt >= fromRow) && (toRow === undefined || stt <= toRow),
+  )
 
   const counts = await prisma.registration.groupBy({ by: ['status'], where: scope.registrationWhere, _count: true })
   const countMap = Object.fromEntries(counts.map((c) => [c.status, c._count])) as Record<RegistrationStatus, number>
@@ -129,10 +137,16 @@ export default async function CampaignMembersPage({
                 ))}
               </SelectInput>
             )}
+            <span className="flex items-center gap-1 text-xs text-slate-500">
+              STT
+              <TextInput name="from" type="number" min={1} defaultValue={from ?? ''} placeholder="1" className="w-16" />
+              →
+              <TextInput name="to" type="number" min={1} defaultValue={to ?? ''} placeholder="10" className="w-16" />
+            </span>
             <SubmitButton variant="outline" size="sm" pendingLabel="Đang lọc…">
               Lọc
             </SubmitButton>
-            {(search || groupFilter) && (
+            {(search || groupFilter || fromRow !== undefined || toRow !== undefined) && (
               <a
                 href={statusFilter ? `/admin/campaigns/${id}/members?status=${statusFilter}` : `/admin/campaigns/${id}/members`}
                 className="text-xs text-slate-500 hover:underline"
@@ -220,11 +234,13 @@ export default async function CampaignMembersPage({
             title={`Danh sách chung — chưa xếp nhóm (${candidates.length})`}
             description="Tích chọn rồi dùng thanh xếp nhóm ở trên để thêm vào nhóm của bạn — thao tác này cũng đồng thời duyệt luôn."
           />
-          <CardBody className="space-y-2">
-            {candidates.map((reg) => (
+          <CardBody className="space-y-2 overflow-x-auto">
+            <MemberTableHeader dynamicFields={dynamicFields} />
+            {candidates.map((reg, i) => (
               <MemberRow
                 key={reg.id}
                 reg={reg}
+                index={i + 1}
                 groups={groups}
                 trackingFields={trackingFields}
                 regFields={regFields}
@@ -239,24 +255,34 @@ export default async function CampaignMembersPage({
       )}
 
       <Card>
-        <CardHeader title={scope.isCampaignWide ? `Thành viên (${registrations.length})` : `Thành viên nhóm của tôi (${registrations.length})`} />
-        <CardBody className="space-y-2">
-          {registrations.length === 0 ? (
+        <CardHeader
+          title={
+            scope.isCampaignWide
+              ? `Thành viên (${rangedRegistrations.length}/${registrations.length})`
+              : `Thành viên nhóm của tôi (${rangedRegistrations.length}/${registrations.length})`
+          }
+        />
+        <CardBody className="space-y-2 overflow-x-auto">
+          {rangedRegistrations.length === 0 ? (
             <EmptyState title="Không tìm thấy thành viên phù hợp" />
           ) : (
-            registrations.map((reg) => (
-              <MemberRow
-                key={reg.id}
-                reg={reg}
-                groups={groups}
-                trackingFields={trackingFields}
-                regFields={regFields}
-                canReview={scope.can(PERMISSIONS.REGISTRATION_REVIEW, reg.groupId)}
-                canManage={scope.can(PERMISSIONS.MEMBER_MANAGE, reg.groupId)}
-                canChangeGroup={scope.can(PERMISSIONS.MEMBER_MANAGE, reg.groupId)}
-                canAttendance={scope.can(PERMISSIONS.ATTENDANCE_MANAGE, reg.groupId)}
-              />
-            ))
+            <>
+              <MemberTableHeader dynamicFields={dynamicFields} />
+              {rangedRegistrations.map(({ reg, stt }) => (
+                <MemberRow
+                  key={reg.id}
+                  reg={reg}
+                  index={stt}
+                  groups={groups}
+                  trackingFields={trackingFields}
+                  regFields={regFields}
+                  canReview={scope.can(PERMISSIONS.REGISTRATION_REVIEW, reg.groupId)}
+                  canManage={scope.can(PERMISSIONS.MEMBER_MANAGE, reg.groupId)}
+                  canChangeGroup={scope.can(PERMISSIONS.MEMBER_MANAGE, reg.groupId)}
+                  canAttendance={scope.can(PERMISSIONS.ATTENDANCE_MANAGE, reg.groupId)}
+                />
+              ))}
+            </>
           )}
         </CardBody>
       </Card>

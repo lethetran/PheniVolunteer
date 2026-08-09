@@ -6,7 +6,7 @@ import type { CampaignStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { assertPermission } from '@/lib/session'
 import { assertCampaignScope } from '@/lib/scope'
-import { PERMISSIONS } from '@/lib/permissions'
+import { PERMISSIONS, CAMPAIGN_ADMIN_PERMISSIONS, MANAGER_GRANTABLE_PERMISSIONS } from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
 import { str, num, bool, dateFrom, slugify } from '@/lib/utils'
 
@@ -58,6 +58,24 @@ function campaignFields(formData: FormData) {
   }
 }
 
+/**
+ * Thêm 1 người làm admin phụ trách sự kiện. Admin không tự động có quyền với sự
+ * kiện nào ngoài sự kiện được thêm — và một khi được thêm, họ mặc định luôn là
+ * thành viên đã duyệt của sự kiện đó (không cần bấm "Tham gia").
+ */
+export async function grantCampaignAdmin(campaignId: string, userId: string, permissions: string[]) {
+  await prisma.campaignAdmin.upsert({
+    where: { campaignId_userId: { campaignId, userId } },
+    update: { permissions },
+    create: { campaignId, userId, permissions },
+  })
+  await prisma.registration.upsert({
+    where: { campaignId_userId: { campaignId, userId } },
+    update: { status: 'APPROVED' },
+    create: { campaignId, userId, status: 'APPROVED', decidedAt: new Date() },
+  })
+}
+
 export async function createCampaign(formData: FormData) {
   const user = await assertPermission(PERMISSIONS.CAMPAIGN_CREATE)
   const fields = campaignFields(formData)
@@ -67,6 +85,14 @@ export async function createCampaign(formData: FormData) {
   const campaign = await prisma.campaign.create({
     data: { ...fields, slug, code, createdById: user.id },
   })
+
+  // Người tạo mặc định là admin toàn quyền của sự kiện này (và chỉ sự kiện này).
+  await grantCampaignAdmin(campaign.id, user.id, CAMPAIGN_ADMIN_PERMISSIONS)
+
+  const coAdminIds = formData.getAll('coAdminIds').map(String).filter((id) => id && id !== user.id)
+  for (const id of coAdminIds) {
+    await grantCampaignAdmin(campaign.id, id, MANAGER_GRANTABLE_PERMISSIONS)
+  }
 
   await logAudit(user.id, 'campaign.create', { entityType: 'Campaign', entityId: campaign.id })
   revalidatePath('/admin/campaigns')

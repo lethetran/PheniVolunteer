@@ -8,18 +8,19 @@ import { PERMISSIONS, type Permission } from './permissions'
 /**
  * Phạm vi quyền của một người dùng bên trong MỘT sự kiện.
  *
- * Ba nguồn quyền được cộng dồn:
- *   1. User.permissions            -> toàn hệ thống, áp dụng cho mọi sự kiện
- *   2. CampaignAdmin.permissions   -> toàn bộ sự kiện này
- *   3. GroupAssignment.permissions -> CHỈ trong nhóm được giao
+ * Quyền quản trị sự kiện KHÔNG còn tự động cấp từ User.permissions (quyền toàn hệ
+ * thống của root cấp) — một Admin phải được thêm làm CampaignAdmin rõ ràng cho
+ * TỪNG sự kiện (khi tạo sự kiện, hoặc sau đó ở trang Cài đặt) mới thao tác được
+ * trên sự kiện đó. Root Admin luôn có tất cả, không cần thêm.
  *
- * Root Admin luôn có tất cả.
+ * Hai nguồn quyền còn lại được cộng dồn:
+ *   1. CampaignAdmin.permissions   -> toàn bộ sự kiện này
+ *   2. GroupAssignment.permissions -> CHỈ trong nhóm được giao
  */
 export class CampaignScope {
   constructor(
     readonly user: CurrentUser,
     readonly campaign: Campaign,
-    private readonly globalPerms: Set<string>,
     private readonly campaignPerms: Set<string>,
     private readonly groupPerms: Map<string, Set<string>>,
     readonly leadGroups: { id: string; name: string }[],
@@ -32,7 +33,7 @@ export class CampaignScope {
 
   /** Người này làm việc trên toàn sự kiện (admin), hay chỉ trong nhóm của mình (lead)? */
   get isCampaignWide() {
-    return this.isRoot || this.globalPerms.size > 0 || this.campaignPerms.size > 0
+    return this.isRoot || this.campaignPerms.size > 0
   }
 
   get isGroupLead() {
@@ -54,7 +55,6 @@ export class CampaignScope {
    */
   can(permission: Permission, groupId?: string | null): boolean {
     if (this.isRoot) return true
-    if (this.globalPerms.has(permission)) return true
     if (this.campaignPerms.has(permission)) return true
     if (groupId) return this.groupPerms.get(groupId)?.has(permission) ?? false
     return false
@@ -103,7 +103,6 @@ async function buildScope(campaign: Campaign, user: CurrentUser) {
     }),
   ])
 
-  const globalPerms = new Set<string>(user.role === 'ROOT_ADMIN' ? [] : user.permissions)
   const campaignPerms = new Set<string>(campaignAdmin?.permissions ?? [])
   const groupPerms = new Map<string, Set<string>>()
   for (const a of assignments) groupPerms.set(a.group.id, new Set(a.permissions))
@@ -111,7 +110,6 @@ async function buildScope(campaign: Campaign, user: CurrentUser) {
   return new CampaignScope(
     user,
     campaign,
-    globalPerms,
     campaignPerms,
     groupPerms,
     assignments.map((a) => a.group),
@@ -149,10 +147,12 @@ export async function assertCampaignScope(idOrSlug: string): Promise<CampaignSco
 }
 
 /**
- * Các sự kiện mà người dùng có vai trò quản trị (admin toàn hệ thống thấy tất cả).
+ * Các sự kiện mà người dùng có vai trò quản trị. Chỉ Root Admin thấy tất cả —
+ * Admin thường chỉ thấy sự kiện mình được thêm làm CampaignAdmin (kể cả sự kiện
+ * do chính mình tạo — người tạo tự động được thêm) hoặc đang làm trưởng nhóm.
  */
 export async function listManagedCampaigns(user: CurrentUser) {
-  if (user.role === 'ROOT_ADMIN' || user.permissions.length > 0) {
+  if (user.role === 'ROOT_ADMIN') {
     return prisma.campaign.findMany({ orderBy: [{ startAt: 'desc' }, { createdAt: 'desc' }] })
   }
   return prisma.campaign.findMany({

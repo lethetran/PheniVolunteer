@@ -1,12 +1,19 @@
 import { requirePermission } from '@/lib/session'
+import { prisma } from '@/lib/prisma'
 import { PERMISSIONS } from '@/lib/permissions'
 import { PageHeader, Card, CardBody } from '@/components/ui/card'
 import { Field, TextInput, TextArea, CheckboxInput } from '@/components/ui/field'
 import { SubmitButton } from '@/components/ui/submit-button'
+import { Avatar } from '@/components/ui/avatar'
 import { createCampaign } from '@/actions/campaigns'
 
 export default async function NewCampaignPage() {
-  await requirePermission(PERMISSIONS.CAMPAIGN_CREATE)
+  const user = await requirePermission(PERMISSIONS.CAMPAIGN_CREATE)
+  const otherAdmins = await prisma.user.findMany({
+    where: { role: 'ADMIN', id: { not: user.id } },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, email: true, image: true },
+  })
 
   return (
     <div className="space-y-6">
@@ -59,6 +66,32 @@ export default async function NewCampaignPage() {
               <CheckboxInput name="allowSelfJoin" defaultChecked label="Cho phép tình nguyện viên tự đăng ký" />
               <CheckboxInput name="requireApproval" defaultChecked label="Cần admin duyệt đăng ký" />
             </div>
+
+            {otherAdmins.length > 0 && (
+              <div className="border-t border-slate-100 pt-4">
+                <p className="mb-1.5 text-sm font-medium text-slate-700">Admin cùng phụ trách sự kiện này</p>
+                <p className="mb-2 text-xs text-slate-500">
+                  Bạn (người tạo) mặc định có toàn quyền với sự kiện này. Admin nào KHÔNG được tích ở đây sẽ
+                  không thao tác được gì trên sự kiện này, kể cả khi họ đang quản admin sự kiện khác.
+                </p>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {otherAdmins.map((a) => (
+                    <CheckboxInput
+                      key={a.id}
+                      name="coAdminIds"
+                      value={a.id}
+                      label={
+                        <span className="flex items-center gap-2">
+                          <Avatar name={a.name} email={a.email} image={a.image} size={22} />
+                          {a.name ?? a.email}
+                        </span>
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <SubmitButton pendingLabel="Đang tạo…">Tạo sự kiện</SubmitButton>
           </form>
         </CardBody>

@@ -94,6 +94,16 @@ export const MANAGER_GRANTABLE_PERMISSIONS = ALL_PERMISSIONS.filter(
   (p) => !GLOBAL_ONLY_PERMISSIONS.includes(p) && p !== PERMISSIONS.CAMPAIGN_EDIT,
 )
 
+/**
+ * Toàn bộ quyền có ý nghĩa ở cấp 1 sự kiện (không gồm các quyền chỉ áp dụng toàn hệ
+ * thống). Cấp mặc định cho người tạo sự kiện và các admin được chọn cùng phụ trách
+ * ngay lúc tạo — họ có toàn quyền với RIÊNG sự kiện này, không tự động có quyền gì
+ * với các sự kiện khác.
+ */
+export const CAMPAIGN_ADMIN_PERMISSIONS = ALL_PERMISSIONS.filter(
+  (p) => !GLOBAL_ONLY_PERMISSIONS.includes(p),
+)
+
 /** Bộ quyền gợi ý khi cấp nhanh cho một Admin mới. */
 export const DEFAULT_ADMIN_PERMISSIONS: Permission[] = [
   PERMISSIONS.CAMPAIGN_CREATE,

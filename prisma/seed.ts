@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { DEFAULT_ADMIN_PERMISSIONS, DEFAULT_GROUP_LEADER_PERMISSIONS } from '../src/lib/permissions'
+import { DEFAULT_ADMIN_PERMISSIONS, DEFAULT_GROUP_LEADER_PERMISSIONS, CAMPAIGN_ADMIN_PERMISSIONS } from '../src/lib/permissions'
 
 const prisma = new PrismaClient()
 
@@ -84,6 +84,19 @@ async function main() {
     },
   })
   console.log(`✓ campaign ${campaign.title}`)
+
+  // Quyền quản trị sự kiện giờ chỉ có hiệu lực khi được thêm rõ ràng làm CampaignAdmin
+  // cho TỪNG sự kiện (User.permissions không còn tự động cấp quyền toàn bộ campaign).
+  await prisma.campaignAdmin.upsert({
+    where: { campaignId_userId: { campaignId: campaign.id, userId: admin.id } },
+    update: { permissions: CAMPAIGN_ADMIN_PERMISSIONS },
+    create: { campaignId: campaign.id, userId: admin.id, permissions: CAMPAIGN_ADMIN_PERMISSIONS },
+  })
+  await prisma.registration.upsert({
+    where: { campaignId_userId: { campaignId: campaign.id, userId: admin.id } },
+    update: { status: 'APPROVED' },
+    create: { campaignId: campaign.id, userId: admin.id, status: 'APPROVED', decidedAt: new Date() },
+  })
 
   const groupA = await prisma.campaignGroup.upsert({
     where: { campaignId_name: { campaignId: campaign.id, name: 'Nhóm Dạy học' } },

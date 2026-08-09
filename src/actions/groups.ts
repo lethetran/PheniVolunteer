@@ -8,6 +8,7 @@ import { logAudit } from '@/lib/audit'
 import { str, num } from '@/lib/utils'
 import { notify } from '@/lib/notify'
 import { isAllowedEmail, provisionUserByEmail } from '@/lib/auth'
+import { grantCampaignAdmin } from '@/actions/campaigns'
 
 function groupPath(campaignId: string) {
   revalidatePath(`/admin/campaigns/${campaignId}/groups`)
@@ -146,11 +147,8 @@ export async function assignCampaignAdmin(campaignId: string, formData: FormData
     .map(String)
     .filter((p): p is Permission => ASSIGNABLE.has(p as Permission))
 
-  await prisma.campaignAdmin.upsert({
-    where: { campaignId_userId: { campaignId, userId: target.id } },
-    update: { permissions },
-    create: { campaignId, userId: target.id, permissions },
-  })
+  // Cấp quyền admin sự kiện + mặc định luôn là thành viên đã duyệt (không cần bấm "Tham gia").
+  await grantCampaignAdmin(campaignId, target.id, permissions)
   if (target.role === 'VOLUNTEER') {
     await prisma.user.update({ where: { id: target.id }, data: { role: 'MANAGER' } })
   }
