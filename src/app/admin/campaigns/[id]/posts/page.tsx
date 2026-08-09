@@ -6,6 +6,7 @@ import { Card, CardHeader, CardBody, EmptyState } from '@/components/ui/card'
 import { Field, TextInput, TextArea, CheckboxInput } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
 import { SubmitButton } from '@/components/ui/submit-button'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { createPost, updatePost, deletePost } from '@/actions/posts'
 
 export default async function CampaignPostsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -71,7 +72,14 @@ export default async function CampaignPostsPage({ params }: { params: Promise<{ 
                     <SubmitButton size="sm" pendingLabel="Đang lưu…">Lưu</SubmitButton>
                   </form>
                   <form action={deletePost.bind(null, post.id)}>
-                    <SubmitButton variant="danger" size="sm" pendingLabel="Đang xoá…">Xoá thông báo</SubmitButton>
+                    <ConfirmSubmitButton
+                      variant="danger"
+                      size="sm"
+                      pendingLabel="Đang xoá…"
+                      confirmMessage={`Xoá thông báo "${post.title}"? Không thể hoàn tác.`}
+                    >
+                      Xoá thông báo
+                    </ConfirmSubmitButton>
                   </form>
                 </div>
               </details>

@@ -1,3 +1,4 @@
+import { Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -37,13 +38,16 @@ export function EmptyState({
   title,
   description,
   action,
+  icon: Icon = Inbox,
 }: {
   title: string
   description?: string
   action?: React.ReactNode
+  icon?: React.ComponentType<{ className?: string }>
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-6 py-12 text-center">
+      <Icon className="mb-1 h-8 w-8 text-slate-300" />
       <p className="text-sm font-medium text-slate-700">{title}</p>
       {description && <p className="max-w-sm text-sm text-slate-500">{description}</p>}
       {action}

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardBody, PageHeader } from '@/components/ui/card'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { ActionForm } from '@/components/ui/action-form'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { TextArea } from '@/components/ui/field'
 import { FieldInput } from '@/components/fields/field-input'
 import { LinkButton } from '@/components/ui/button'
@@ -213,9 +214,14 @@ export default async function CampaignDetailPage({
                   {group && <p className="text-sm text-slate-500">Nhóm: {group.name}</p>}
                   {['PENDING', 'APPROVED', 'WAITLIST'].includes(registration.status) && (
                     <ActionForm action={cancelRegistration.bind(null, registration.id)}>
-                      <SubmitButton variant="outline" className="w-full" pendingLabel="Đang huỷ…">
+                      <ConfirmSubmitButton
+                        variant="outline"
+                        className="w-full"
+                        pendingLabel="Đang huỷ…"
+                        confirmMessage="Huỷ đăng ký sự kiện này? Bạn có thể đăng ký lại sau nếu sự kiện còn nhận."
+                      >
                         Huỷ đăng ký
-                      </SubmitButton>
+                      </ConfirmSubmitButton>
                     </ActionForm>
                   )}
                 </div>

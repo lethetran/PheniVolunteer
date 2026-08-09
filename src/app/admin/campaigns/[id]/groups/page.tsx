@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader, EmptyState } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Field, TextInput, TextArea, CheckboxInput } from '@/components/ui/field'
 import { SubmitButton } from '@/components/ui/submit-button'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { Avatar } from '@/components/ui/avatar'
 import {
   createGroup,
@@ -108,7 +109,14 @@ export default async function CampaignGroupsPage({ params }: { params: Promise<{
                     <div className="flex gap-2">
                       <SubmitButton size="sm" pendingLabel="Đang lưu…">Lưu</SubmitButton>
                       <form action={deleteGroup.bind(null, g.id)}>
-                        <SubmitButton variant="danger" size="sm" pendingLabel="Đang xoá…">Xoá nhóm</SubmitButton>
+                        <ConfirmSubmitButton
+                          variant="danger"
+                          size="sm"
+                          pendingLabel="Đang xoá…"
+                          confirmMessage={`Xoá vĩnh viễn nhóm "${g.name}"? Thành viên trong nhóm sẽ về trạng thái chưa xếp nhóm.`}
+                        >
+                          Xoá nhóm
+                        </ConfirmSubmitButton>
                       </form>
                     </div>
                   </form>

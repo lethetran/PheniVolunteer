@@ -10,6 +10,7 @@ import { CAMPAIGN_STATUS } from '@/lib/labels'
 import { CHAT_ACCESS_LABELS } from '@/lib/chat'
 import { toDateTimeLocal } from '@/lib/utils'
 import { Card, CardHeader, CardBody } from '@/components/ui/card'
+import { FormSection } from '@/components/ui/form-section'
 import { Field, TextInput, TextArea, SelectInput, CheckboxInput } from '@/components/ui/field'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { ConfirmDeleteForm } from '@/components/ui/confirm-delete-form'
@@ -58,52 +59,68 @@ export default async function CampaignSettingsPage({ params }: { params: Promise
       <Card>
         <CardHeader title="Thông tin sự kiện" />
         <CardBody>
-          <form action={updateCampaign.bind(null, id)} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Tên sự kiện" required htmlFor="title">
-                <TextInput id="title" name="title" required defaultValue={c.title} />
+          <form action={updateCampaign.bind(null, id)} className="space-y-5">
+            <FormSection title="Thông tin cơ bản">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Tên sự kiện" required htmlFor="title">
+                  <TextInput id="title" name="title" required defaultValue={c.title} />
+                </Field>
+                <Field label="Đơn vị tổ chức" htmlFor="organizer">
+                  <TextInput id="organizer" name="organizer" defaultValue={c.organizer ?? ''} />
+                </Field>
+                <Field label="Địa điểm" htmlFor="location">
+                  <TextInput id="location" name="location" defaultValue={c.location ?? ''} />
+                </Field>
+                <Field label="Ảnh bìa (URL)" htmlFor="coverImage">
+                  <TextInput id="coverImage" name="coverImage" defaultValue={c.coverImage ?? ''} />
+                </Field>
+              </div>
+              <Field label="Mô tả ngắn" htmlFor="summary">
+                <TextInput id="summary" name="summary" defaultValue={c.summary ?? ''} />
               </Field>
-              <Field label="Đơn vị tổ chức" htmlFor="organizer">
-                <TextInput id="organizer" name="organizer" defaultValue={c.organizer ?? ''} />
+              <Field label="Mô tả chi tiết" htmlFor="description">
+                <TextArea id="description" name="description" rows={6} defaultValue={c.description ?? ''} />
               </Field>
-              <Field label="Địa điểm" htmlFor="location">
-                <TextInput id="location" name="location" defaultValue={c.location ?? ''} />
-              </Field>
-              <Field label="Ảnh bìa (URL)" htmlFor="coverImage">
-                <TextInput id="coverImage" name="coverImage" defaultValue={c.coverImage ?? ''} />
-              </Field>
-              <Field label="Bắt đầu" htmlFor="startAt">
-                <TextInput id="startAt" name="startAt" type="datetime-local" defaultValue={toDateTimeLocal(c.startAt)} />
-              </Field>
-              <Field label="Kết thúc" htmlFor="endAt">
-                <TextInput id="endAt" name="endAt" type="datetime-local" defaultValue={toDateTimeLocal(c.endAt)} />
-              </Field>
-              <Field label="Mở đăng ký" htmlFor="regOpenAt">
-                <TextInput id="regOpenAt" name="regOpenAt" type="datetime-local" defaultValue={toDateTimeLocal(c.regOpenAt)} />
-              </Field>
-              <Field label="Đóng đăng ký" htmlFor="regCloseAt">
-                <TextInput id="regCloseAt" name="regCloseAt" type="datetime-local" defaultValue={toDateTimeLocal(c.regCloseAt)} />
-              </Field>
+            </FormSection>
+
+            <FormSection title="Thời gian">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Bắt đầu" htmlFor="startAt">
+                  <TextInput id="startAt" name="startAt" type="datetime-local" defaultValue={toDateTimeLocal(c.startAt)} />
+                </Field>
+                <Field label="Kết thúc" htmlFor="endAt">
+                  <TextInput id="endAt" name="endAt" type="datetime-local" defaultValue={toDateTimeLocal(c.endAt)} />
+                </Field>
+                <Field label="Mở đăng ký" htmlFor="regOpenAt">
+                  <TextInput id="regOpenAt" name="regOpenAt" type="datetime-local" defaultValue={toDateTimeLocal(c.regOpenAt)} />
+                </Field>
+                <Field label="Đóng đăng ký" htmlFor="regCloseAt">
+                  <TextInput id="regCloseAt" name="regCloseAt" type="datetime-local" defaultValue={toDateTimeLocal(c.regCloseAt)} />
+                </Field>
+              </div>
+            </FormSection>
+
+            <FormSection title="Đăng ký">
               <Field label="Số lượng tối đa" htmlFor="capacity" hint="Bỏ trống nếu không giới hạn">
-                <TextInput id="capacity" name="capacity" type="number" min={0} defaultValue={c.capacity ?? ''} />
+                <TextInput id="capacity" name="capacity" type="number" min={0} defaultValue={c.capacity ?? ''} className="sm:max-w-xs" />
               </Field>
-              <Field label="Giờ TNV mặc định" htmlFor="hoursDefault">
-                <TextInput id="hoursDefault" name="hoursDefault" type="number" step="0.5" defaultValue={c.hoursDefault ?? 0} />
-              </Field>
-              <Field label="Điểm rèn luyện mặc định" htmlFor="pointsDefault">
-                <TextInput id="pointsDefault" name="pointsDefault" type="number" defaultValue={c.pointsDefault ?? 0} />
-              </Field>
-            </div>
-            <Field label="Mô tả ngắn" htmlFor="summary">
-              <TextInput id="summary" name="summary" defaultValue={c.summary ?? ''} />
-            </Field>
-            <Field label="Mô tả chi tiết" htmlFor="description">
-              <TextArea id="description" name="description" rows={6} defaultValue={c.description ?? ''} />
-            </Field>
-            <div className="flex flex-wrap gap-4">
-              <CheckboxInput name="allowSelfJoin" defaultChecked={c.allowSelfJoin} label="Cho phép tình nguyện viên tự đăng ký" />
-              <CheckboxInput name="requireApproval" defaultChecked={c.requireApproval} label="Cần admin duyệt đăng ký" />
-            </div>
+              <div className="flex flex-wrap gap-4">
+                <CheckboxInput name="allowSelfJoin" defaultChecked={c.allowSelfJoin} label="Cho phép tình nguyện viên tự đăng ký" />
+                <CheckboxInput name="requireApproval" defaultChecked={c.requireApproval} label="Cần admin duyệt đăng ký" />
+              </div>
+            </FormSection>
+
+            <FormSection title="Nâng cao" description="Giá trị mặc định gán cho mỗi thành viên khi hoàn thành sự kiện.">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Giờ TNV mặc định" htmlFor="hoursDefault">
+                  <TextInput id="hoursDefault" name="hoursDefault" type="number" step="0.5" defaultValue={c.hoursDefault ?? 0} />
+                </Field>
+                <Field label="Điểm rèn luyện mặc định" htmlFor="pointsDefault">
+                  <TextInput id="pointsDefault" name="pointsDefault" type="number" defaultValue={c.pointsDefault ?? 0} />
+                </Field>
+              </div>
+            </FormSection>
+
             <SubmitButton pendingLabel="Đang lưu…">Lưu thay đổi</SubmitButton>
           </form>
         </CardBody>

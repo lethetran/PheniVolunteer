@@ -2,6 +2,7 @@ import type { CampaignGroup, FieldDefinition, Registration, User } from '@prisma
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { SubmitButton } from '@/components/ui/submit-button'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { SelectInput, TextInput, TextArea } from '@/components/ui/field'
 import { FieldInput } from '@/components/fields/field-input'
 import { SelectRowCheckbox } from '@/components/campaign/select-row-checkbox'
@@ -231,9 +232,14 @@ export function MemberRow({
             )}
             {canManage && reg.status !== 'REMOVED' && (
               <form action={removeMember.bind(null, reg.id)}>
-                <SubmitButton variant="ghost" size="sm" pendingLabel="Đang loại…">
+                <ConfirmSubmitButton
+                  variant="ghost"
+                  size="sm"
+                  pendingLabel="Đang loại…"
+                  confirmMessage={`Loại ${reg.user.name ?? reg.user.email} khỏi sự kiện? Có thể xếp lại sau nhưng giờ/điểm đã ghi sẽ không tự khôi phục.`}
+                >
                   Loại khỏi sự kiện
-                </SubmitButton>
+                </ConfirmSubmitButton>
               </form>
             )}
           </div>

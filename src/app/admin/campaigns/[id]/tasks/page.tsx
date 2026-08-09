@@ -7,6 +7,7 @@ import { Card, CardHeader, CardBody, EmptyState } from '@/components/ui/card'
 import { Field, TextInput, TextArea, SelectInput, CheckboxInput } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
 import { SubmitButton } from '@/components/ui/submit-button'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { Avatar } from '@/components/ui/avatar'
 import { QuickTaskToggle } from '@/components/campaign/quick-task-toggle'
 import { createTask, updateTask, deleteTask, reviewTaskProgress } from '@/actions/tasks'
@@ -121,7 +122,14 @@ export default async function CampaignTasksPage({ params }: { params: Promise<{ 
                       </div>
                     </form>
                     <form action={deleteTask.bind(null, task.id)} className="mt-2">
-                      <SubmitButton variant="danger" size="sm" pendingLabel="Đang xoá…">Xoá nhiệm vụ</SubmitButton>
+                      <ConfirmSubmitButton
+                        variant="danger"
+                        size="sm"
+                        pendingLabel="Đang xoá…"
+                        confirmMessage={`Xoá nhiệm vụ "${task.title}"? Tiến độ các TNV đã báo cáo cho nhiệm vụ này cũng sẽ mất.`}
+                      >
+                        Xoá nhiệm vụ
+                      </ConfirmSubmitButton>
                     </form>
                   </details>
                 )}

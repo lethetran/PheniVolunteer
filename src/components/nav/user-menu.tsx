@@ -25,6 +25,9 @@ export function UserMenu({ user, isStaff }: { user: CurrentUser; isStaff: boolea
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
+        aria-label="Menu tài khoản"
+        aria-haspopup="menu"
+        aria-expanded={open}
         className="flex items-center gap-2 rounded-full p-0.5 pr-2 hover:bg-slate-100"
       >
         <Avatar name={user.name} email={user.email} image={user.image} size={30} />

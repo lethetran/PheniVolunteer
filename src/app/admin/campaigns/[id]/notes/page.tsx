@@ -7,6 +7,7 @@ import { Card, CardHeader, CardBody, EmptyState } from '@/components/ui/card'
 import { Field, TextArea, SelectInput, CheckboxInput } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
 import { SubmitButton } from '@/components/ui/submit-button'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { createNote, updateNoteStatus, deleteNote } from '@/actions/notes'
 import type { NoteStatus } from '@prisma/client'
 
@@ -108,9 +109,14 @@ export default async function CampaignNotesPage({ params }: { params: Promise<{ 
                     </form>
                   )}
                   <form action={deleteNote.bind(null, note.id)}>
-                    <SubmitButton variant="ghost" size="sm" pendingLabel="Đang xoá…">
+                    <ConfirmSubmitButton
+                      variant="ghost"
+                      size="sm"
+                      pendingLabel="Đang xoá…"
+                      confirmMessage="Xoá ghi chú này? Không thể hoàn tác."
+                    >
                       Xoá
-                    </SubmitButton>
+                    </ConfirmSubmitButton>
                   </form>
                 </div>
               </div>

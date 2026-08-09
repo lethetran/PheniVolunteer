@@ -22,7 +22,7 @@ export function CampaignCard({
       <div className="flex h-32 items-center justify-center bg-gradient-to-br from-brand-500 to-brand-700 text-white">
         {campaign.coverImage ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={campaign.coverImage} alt="" className="h-full w-full object-cover" />
+          <img src={campaign.coverImage} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <span className="px-4 text-center text-sm font-semibold opacity-90">{campaign.code}</span>
         )}
