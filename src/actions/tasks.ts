@@ -8,7 +8,7 @@ import { assertCampaignScope } from '@/lib/scope'
 import { PERMISSIONS } from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
 import { str, num, bool, dateFrom } from '@/lib/utils'
-import { notify } from '@/lib/notify'
+import { notify, notifyMany } from '@/lib/notify'
 
 function taskPaths(campaignId: string) {
   revalidatePath(`/admin/campaigns/${campaignId}/tasks`)
@@ -37,13 +37,34 @@ export async function createTask(campaignId: string, formData: FormData) {
     },
   })
   await logAudit(scope.user.id, 'task.create', { entityType: 'Task', entityId: task.id })
+
+  const recipients = await prisma.registration.findMany({
+    where: { campaignId, status: 'APPROVED', ...(groupId ? { groupId } : {}) },
+    select: { userId: true },
+  })
+  await notifyMany(
+    recipients.map((r) => ({
+      userId: r.userId,
+      type: 'TASK_ASSIGNED',
+      title: `Nhiệm vụ mới: ${title}`,
+      body: task.dueAt ? `Hạn hoàn thành: ${task.dueAt.toLocaleDateString('vi-VN')}` : undefined,
+      link: `/campaigns/${scope.campaign.slug}`,
+      email: false,
+    })),
+  )
+
   taskPaths(campaignId)
 }
 
+/**
+ * Chỉ Admin/quản lý toàn sự kiện được sửa hoặc xoá nhiệm vụ (kể cả nhiệm vụ do
+ * chính trưởng nhóm tạo) — trưởng nhóm chỉ tạo nhiệm vụ và tích tiến độ, không
+ * được đổi nội dung nhiệm vụ sau khi đã giao cho nhóm.
+ */
 export async function updateTask(taskId: string, formData: FormData) {
   const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } })
   const scope = await assertCampaignScope(task.campaignId)
-  scope.assert(PERMISSIONS.TASK_MANAGE, task.groupId)
+  scope.assert(PERMISSIONS.TASK_MANAGE)
 
   const title = str(formData, 'title')
   if (!title) throw new Error('Tên nhiệm vụ là bắt buộc.')
@@ -66,7 +87,7 @@ export async function updateTask(taskId: string, formData: FormData) {
 export async function deleteTask(taskId: string) {
   const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } })
   const scope = await assertCampaignScope(task.campaignId)
-  scope.assert(PERMISSIONS.TASK_MANAGE, task.groupId)
+  scope.assert(PERMISSIONS.TASK_MANAGE)
   await prisma.task.delete({ where: { id: taskId } })
   await logAudit(scope.user.id, 'task.delete', { entityType: 'Task', entityId: taskId })
   taskPaths(task.campaignId)

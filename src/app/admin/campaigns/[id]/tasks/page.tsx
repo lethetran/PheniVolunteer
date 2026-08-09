@@ -99,7 +99,7 @@ export default async function CampaignTasksPage({ params }: { params: Promise<{ 
                   </div>
                 )}
 
-                {scope.can(PERMISSIONS.TASK_MANAGE, task.groupId) && (
+                {scope.can(PERMISSIONS.TASK_MANAGE) && (
                   <details>
                     <summary className="cursor-pointer text-xs font-medium text-brand-600">Sửa / xoá nhiệm vụ</summary>
                     <form action={updateTask.bind(null, task.id)} className="mt-3 space-y-3">
