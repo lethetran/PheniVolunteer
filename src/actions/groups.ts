@@ -15,6 +15,19 @@ function groupPath(campaignId: string) {
   revalidatePath(`/admin/campaigns/${campaignId}/members`)
 }
 
+/** Hạ MANAGER về VOLUNTEER nếu người này không còn phụ trách nhóm/sự kiện nào. */
+async function demoteIfNoAssignmentsLeft(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  if (user?.role !== 'MANAGER') return
+  const [groupCount, campaignCount] = await Promise.all([
+    prisma.groupAssignment.count({ where: { userId } }),
+    prisma.campaignAdmin.count({ where: { userId } }),
+  ])
+  if (groupCount === 0 && campaignCount === 0) {
+    await prisma.user.update({ where: { id: userId }, data: { role: 'VOLUNTEER' } })
+  }
+}
+
 export async function createGroup(campaignId: string, formData: FormData) {
   const scope = await assertCampaignScope(campaignId)
   scope.assert(PERMISSIONS.GROUP_MANAGE)
@@ -125,6 +138,7 @@ export async function removeGroupLeader(groupId: string, userId: string) {
   const scope = await assertCampaignScope(group.campaignId)
   scope.assert(PERMISSIONS.MANAGER_ASSIGN)
   await prisma.groupAssignment.delete({ where: { groupId_userId: { groupId, userId } } })
+  await demoteIfNoAssignmentsLeft(userId)
   await logAudit(scope.user.id, 'group.leader.remove', {
     entityType: 'CampaignGroup',
     entityId: groupId,
@@ -171,6 +185,7 @@ export async function removeCampaignAdmin(campaignId: string, userId: string) {
   const scope = await assertCampaignScope(campaignId)
   scope.assert(PERMISSIONS.MANAGER_ASSIGN)
   await prisma.campaignAdmin.delete({ where: { campaignId_userId: { campaignId, userId } } })
+  await demoteIfNoAssignmentsLeft(userId)
   await logAudit(scope.user.id, 'campaignAdmin.remove', {
     entityType: 'Campaign',
     entityId: campaignId,

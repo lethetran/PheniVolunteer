@@ -142,7 +142,7 @@ export async function updateTaskProgress(taskId: string, formData: FormData) {
 export async function reviewTaskProgress(progressId: string, formData: FormData) {
   const progress = await prisma.taskProgress.findUniqueOrThrow({
     where: { id: progressId },
-    include: { task: true, user: true },
+    include: { task: { include: { campaign: { select: { slug: true } } } }, user: true },
   })
   const scope = await assertCampaignScope(progress.task.campaignId)
   scope.assert(PERMISSIONS.TASK_REVIEW, progress.task.groupId)
@@ -163,7 +163,7 @@ export async function reviewTaskProgress(progressId: string, formData: FormData)
     type: 'TASK_REVIEWED',
     title: `Nhiệm vụ "${progress.task.title}" ${status === 'DONE' ? 'đã được xác nhận hoàn thành' : 'cần xem lại'}`,
     body: str(formData, 'reviewNote'),
-    link: `/campaigns/${progress.task.campaignId}`,
+    link: `/campaigns/${progress.task.campaign.slug}`,
     email: false,
   })
 

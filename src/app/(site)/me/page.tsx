@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
 import { ROLE_LABELS } from '@/lib/permissions'
@@ -17,10 +18,19 @@ export default async function ProfilePage() {
   const full = await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
   const profileData = readData(full.profileData)
 
-  const fieldDefs = await prisma.fieldDefinition.findMany({
-    where: { scope: 'VOLUNTEER_PROFILE', archived: false, visibleToVolunteer: true },
-    orderBy: { order: 'asc' },
-  })
+  const [fieldDefs, registrations] = await Promise.all([
+    prisma.fieldDefinition.findMany({
+      where: { scope: 'VOLUNTEER_PROFILE', archived: false, visibleToVolunteer: true },
+      orderBy: { order: 'asc' },
+    }),
+    prisma.registration.findMany({
+      where: { userId: user.id, status: 'APPROVED' },
+      select: { hoursAwarded: true, pointsAwarded: true, completed: true },
+    }),
+  ])
+  const totalHours = registrations.reduce((s, r) => s + r.hoursAwarded, 0)
+  const totalPoints = registrations.reduce((s, r) => s + r.pointsAwarded, 0)
+  const completedCount = registrations.filter((r) => r.completed).length
 
   return (
     <div className="space-y-6">
@@ -35,6 +45,24 @@ export default async function ProfilePage() {
               <p className="text-sm text-slate-500">{full.email}</p>
             </div>
             <Badge tone={ROLE_TONE[full.role]}>{ROLE_LABELS[full.role]}</Badge>
+
+            <div className="mt-2 grid w-full grid-cols-3 gap-2 border-t border-slate-100 pt-4 text-center">
+              <div>
+                <p className="text-lg font-bold text-slate-900">{totalHours}</p>
+                <p className="text-[11px] text-slate-500">Giờ CTXH</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-slate-900">{totalPoints}</p>
+                <p className="text-[11px] text-slate-500">Điểm rèn luyện</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-slate-900">{completedCount}</p>
+                <p className="text-[11px] text-slate-500">Sự kiện hoàn thành</p>
+              </div>
+            </div>
+            <Link href="/dashboard" className="text-xs font-medium text-brand-600 hover:underline">
+              Xem chi tiết từng sự kiện →
+            </Link>
           </CardBody>
         </Card>
 

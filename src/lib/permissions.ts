@@ -84,9 +84,9 @@ export const GLOBAL_ONLY_PERMISSIONS: Permission[] = [
 
 export const ALL_PERMISSIONS = Object.values(PERMISSIONS) as Permission[]
 
-/** Bộ quyền Root có thể cấp cho một Admin. */
+/** Bộ quyền Root có thể cấp cho một Admin. Xoá cứng sự kiện luôn là đặc quyền riêng của Root, không cấp được. */
 export const ADMIN_GRANTABLE_PERMISSIONS = ALL_PERMISSIONS.filter(
-  (p) => p !== PERMISSIONS.USER_MANAGE,
+  (p) => p !== PERMISSIONS.USER_MANAGE && p !== PERMISSIONS.CAMPAIGN_DELETE,
 )
 
 /** Bộ quyền Admin có thể cấp cho quản lý nhóm / quản lý chiến dịch. */

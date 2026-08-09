@@ -11,6 +11,7 @@ import { MemberRow, MemberTableHeader } from '@/components/campaign/member-row'
 import { ImportJobList } from '@/components/campaign/import-job-list'
 import { importCampaignMembers, importApprovalDecisions } from '@/actions/import'
 import { bulkAssignGroup } from '@/actions/registrations'
+import { sendBulkNotification } from '@/actions/notifications-actions'
 import type { Prisma, RegistrationStatus } from '@prisma/client'
 
 export default async function CampaignMembersPage({
@@ -97,8 +98,20 @@ export default async function CampaignMembersPage({
       })
     : []
 
+  const campaignApprovedCount = scope.campaign.capacity
+    ? await prisma.registration.count({ where: { campaignId: id, status: 'APPROVED' } })
+    : 0
+  const overCapacity = Boolean(scope.campaign.capacity && campaignApprovedCount > scope.campaign.capacity)
+
   return (
     <div className="space-y-6">
+      {overCapacity && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          ⚠️ Sự kiện đã vượt số lượng tối đa: <strong>{campaignApprovedCount}/{scope.campaign.capacity}</strong> đã duyệt.
+          Cân nhắc chuyển bớt sang danh sách chờ hoặc tăng chỉ tiêu ở Cài đặt.
+        </div>
+      )}
+
       <Card>
         <CardBody className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -212,20 +225,39 @@ export default async function CampaignMembersPage({
       )}
 
       {canBulkAssign && bulkGroupOptions.length > 0 && (
-        <form id="bulk-group-form" action={bulkAssignGroup.bind(null, id)} className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-2.5 backdrop-blur">
-          <span className="text-xs font-medium text-brand-700">Đã tích chọn → xếp vào:</span>
-          <SelectInput name="groupId" defaultValue={bulkGroupOptions.length === 1 ? bulkGroupOptions[0].id : ''} className="w-44">
-            {scope.isCampaignWide && <option value="">Bỏ khỏi nhóm</option>}
-            {bulkGroupOptions.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </SelectInput>
-          <SubmitButton size="sm" pendingLabel="Đang xếp…">
-            Xếp vào nhóm
-          </SubmitButton>
-        </form>
+        <div className="sticky top-16 z-10 space-y-2 rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-2.5 backdrop-blur">
+          <form id="bulk-group-form" action={bulkAssignGroup.bind(null, id)} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-brand-700">Đã tích chọn → xếp vào:</span>
+            <SelectInput name="groupId" defaultValue={bulkGroupOptions.length === 1 ? bulkGroupOptions[0].id : ''} className="w-44">
+              {scope.isCampaignWide && <option value="">Bỏ khỏi nhóm</option>}
+              {bulkGroupOptions.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </SelectInput>
+            <SubmitButton size="sm" pendingLabel="Đang xếp…">
+              Xếp vào nhóm
+            </SubmitButton>
+
+            <details className="w-full">
+              <summary className="cursor-pointer text-xs font-medium text-brand-700">
+                Hoặc gửi thông báo tới người đã chọn
+              </summary>
+              <div className="mt-2 flex flex-wrap items-end gap-2 border-t border-brand-100 pt-2">
+                <TextInput name="notifyTitle" placeholder="Tiêu đề thông báo" className="w-56" />
+                <TextInput name="notifyBody" placeholder="Nội dung (tuỳ chọn)" className="flex-1 min-w-[10rem]" />
+                <label className="flex items-center gap-1.5 text-xs text-brand-700">
+                  <input type="checkbox" name="notifyEmail" className="h-4 w-4 rounded border-slate-300 text-brand-600" />
+                  Gửi kèm email
+                </label>
+                <SubmitButton size="sm" variant="outline" formAction={sendBulkNotification.bind(null, id)} pendingLabel="Đang gửi…">
+                  Gửi thông báo
+                </SubmitButton>
+              </div>
+            </details>
+          </form>
+        </div>
       )}
 
       {candidates.length > 0 && (

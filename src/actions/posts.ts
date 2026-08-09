@@ -54,7 +54,7 @@ export async function createPost(formData: FormData) {
       title,
       body,
       pinned: bool(formData, 'pinned'),
-      published: bool(formData, 'published') || true,
+      published: bool(formData, 'published'),
       authorId: user.id,
       emailSentAt: sendEmail ? new Date() : null,
     },

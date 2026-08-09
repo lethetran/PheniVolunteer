@@ -140,8 +140,10 @@ export async function cancelRegistration(
       throw new Error('Không thể huỷ đăng ký ở trạng thái hiện tại.')
     }
 
+    const wasApproved = registration.status === 'APPROVED'
     await prisma.registration.update({ where: { id: registrationId }, data: { status: 'CANCELLED' } })
     await logAudit(user.id, 'registration.cancel', { entityType: 'Registration', entityId: registrationId })
+    if (wasApproved) await promoteFromWaitlist(registration.campaignId, user.id)
     memberPaths(registration.campaignId, registration.campaign.slug)
     return undefined
   } catch (e) {
@@ -189,6 +191,8 @@ export async function decideRegistration(registrationId: string, formData: FormD
   memberPaths(registration.campaignId, registration.campaign.slug)
 }
 
+const FINALIZED_STATUSES: RegistrationStatus[] = ['REJECTED', 'REMOVED', 'CANCELLED']
+
 export async function updateRegistrationGroup(registrationId: string, formData: FormData) {
   const registration = await prisma.registration.findUniqueOrThrow({
     where: { id: registrationId },
@@ -200,6 +204,13 @@ export async function updateRegistrationGroup(registrationId: string, formData: 
   // Trưởng nhóm chỉ được kéo người từ nhóm mình quản lý (hoặc chưa có nhóm) sang.
   if (!scope.isCampaignWide && registration.groupId && !scope.leadGroupIds.includes(registration.groupId)) {
     throw new Error('Bạn không quản lý nhóm hiện tại của thành viên này.')
+  }
+  // Không tự ý duyệt lại đăng ký đã ở trạng thái chốt.
+  if (!scope.isCampaignWide && FINALIZED_STATUSES.includes(registration.status)) {
+    throw new Error(`Đăng ký này đang ở trạng thái "${REGISTRATION_STATUS[registration.status].label}", không thể xếp nhóm.`)
+  }
+  if (!scope.isCampaignWide && groupId && groupId !== registration.groupId) {
+    await assertGroupHasRoom(groupId, 1)
   }
 
   await prisma.registration.update({
@@ -217,6 +228,20 @@ export async function updateRegistrationGroup(registrationId: string, formData: 
   memberPaths(registration.campaignId, registration.campaign.slug)
 }
 
+/** Chặn cứng khi nhóm đã đủ chỉ tiêu (chỉ áp dụng khi trưởng nhóm tự xếp — admin được ghi đè). */
+async function assertGroupHasRoom(groupId: string, incoming: number) {
+  const group = await prisma.campaignGroup.findUnique({
+    where: { id: groupId },
+    select: { name: true, quota: true, _count: { select: { registrations: { where: { status: 'APPROVED' } } } } },
+  })
+  if (!group?.quota) return
+  if (group._count.registrations + incoming > group.quota) {
+    throw new Error(
+      `Nhóm "${group.name}" đã đủ chỉ tiêu (${group._count.registrations}/${group.quota}), không thể xếp thêm.`,
+    )
+  }
+}
+
 /**
  * Chọn nhiều thành viên từ danh sách có sẵn (tick chọn) rồi xếp cùng lúc vào 1 nhóm.
  * Admin (toàn sự kiện) xếp/gỡ tự do. Trưởng nhóm chỉ được xếp vào ĐÚNG nhóm mình phụ
@@ -232,18 +257,24 @@ export async function bulkAssignGroup(campaignId: string, formData: FormData) {
   const ids = formData.getAll('registrationIds').map(String).filter(Boolean)
   if (ids.length === 0) throw new Error('Chưa chọn thành viên nào.')
 
-  const targetIds = scope.isCampaignWide
-    ? ids
-    : (
-        await prisma.registration.findMany({
-          where: {
-            id: { in: ids },
-            campaignId,
-            OR: [{ groupId: null }, { groupId: { in: scope.leadGroupIds } }],
-          },
-          select: { id: true },
-        })
-      ).map((r) => r.id)
+  const targetRegs = scope.isCampaignWide
+    ? await prisma.registration.findMany({ where: { id: { in: ids }, campaignId }, select: { id: true, groupId: true } })
+    : await prisma.registration.findMany({
+        where: {
+          id: { in: ids },
+          campaignId,
+          OR: [{ groupId: null }, { groupId: { in: scope.leadGroupIds } }],
+          // Không tự ý duyệt lại đăng ký đã ở trạng thái chốt.
+          status: { notIn: FINALIZED_STATUSES },
+        },
+        select: { id: true, groupId: true },
+      })
+  const targetIds = targetRegs.map((r) => r.id)
+
+  if (!scope.isCampaignWide && groupId) {
+    const newAdditions = targetRegs.filter((r) => r.groupId !== groupId).length
+    await assertGroupHasRoom(groupId, newAdditions)
+  }
 
   const { count } = await prisma.registration.updateMany({
     where: { id: { in: targetIds }, campaignId },
@@ -324,11 +355,50 @@ export async function removeMember(registrationId: string) {
   const scope = await assertCampaignScope(registration.campaignId)
   scope.assert(PERMISSIONS.MEMBER_MANAGE, registration.groupId)
 
+  const wasApproved = registration.status === 'APPROVED'
   await prisma.registration.update({ where: { id: registrationId }, data: { status: 'REMOVED' } })
   await logAudit(scope.user.id, 'registration.update', {
     entityType: 'Registration',
     entityId: registrationId,
     metadata: { action: 'remove' },
   })
+  if (wasApproved) await promoteFromWaitlist(registration.campaignId, scope.user.id)
   memberPaths(registration.campaignId, registration.campaign.slug)
+}
+
+/** Khi 1 chỗ trống ra (do huỷ/loại thành viên đã duyệt), tự đôn người sớm nhất trong danh sách chờ. */
+async function promoteFromWaitlist(campaignId: string, actorId: string) {
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    select: { capacity: true, title: true, slug: true },
+  })
+  if (!campaign?.capacity) return
+
+  const approvedCount = await prisma.registration.count({ where: { campaignId, status: 'APPROVED' } })
+  if (approvedCount >= campaign.capacity) return
+
+  const next = await prisma.registration.findFirst({
+    where: { campaignId, status: 'WAITLIST' },
+    orderBy: { appliedAt: 'asc' },
+    include: { user: true },
+  })
+  if (!next) return
+
+  await prisma.registration.update({
+    where: { id: next.id },
+    data: { status: 'APPROVED', decidedAt: new Date(), decidedById: actorId },
+  })
+  await logAudit(actorId, 'registration.decide', {
+    entityType: 'Registration',
+    entityId: next.id,
+    metadata: { decision: 'APPROVED', promotedFromWaitlist: true },
+  })
+  await notify({
+    userId: next.userId,
+    type: 'REGISTRATION_DECIDED',
+    title: `Đã duyệt: ${campaign.title}`,
+    body: 'Có chỗ trống nên bạn đã được chuyển từ danh sách chờ sang đã duyệt.',
+    link: `/campaigns/${campaign.slug}`,
+    email: { to: next.user.email, dedupeKey: `reg-decide:${next.id}:APPROVED:waitlist-promo` },
+  })
 }

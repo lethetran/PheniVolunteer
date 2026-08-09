@@ -1,5 +1,6 @@
 import { requirePermission } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { PERMISSIONS, hasGlobalPermission, ROLE_LABELS } from '@/lib/permissions'
 import { PageHeader, Card, CardHeader, CardBody, EmptyState } from '@/components/ui/card'
 import { TextInput } from '@/components/ui/field'
@@ -9,33 +10,44 @@ import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { USER_STATUS, ROLE_TONE } from '@/lib/labels'
 import { FieldManager } from '@/components/fields/field-manager'
+import { Pagination } from '@/components/ui/pagination'
 import { importVolunteers } from '@/actions/import'
+
+const PAGE_SIZE = 50
 
 export default async function VolunteersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; page?: string }>
 }) {
   const user = await requirePermission(PERMISSIONS.VOLUNTEER_VIEW)
-  const { q } = await searchParams
+  const { q, page: pageParam } = await searchParams
+  const page = Math.max(1, Number(pageParam) || 1)
 
-  const volunteers = await prisma.user.findMany({
-    where: {
-      // Trưởng nhóm (MANAGER) vẫn tính là tình nguyện viên, chỉ có thêm trách nhiệm phụ trách nhóm.
-      role: { in: ['VOLUNTEER', 'MANAGER'] },
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: q, mode: 'insensitive' } },
-              { email: { contains: q, mode: 'insensitive' } },
-              { studentCode: { contains: q, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  })
+  const where: Prisma.UserWhereInput = {
+    // Trưởng nhóm (MANAGER) vẫn tính là tình nguyện viên, chỉ có thêm trách nhiệm phụ trách nhóm.
+    role: { in: ['VOLUNTEER', 'MANAGER'] },
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' as const } },
+            { email: { contains: q, mode: 'insensitive' as const } },
+            { studentCode: { contains: q, mode: 'insensitive' as const } },
+          ],
+        }
+      : {}),
+  }
+
+  const [volunteers, totalVolunteers] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.user.count({ where }),
+  ])
+  const totalPages = Math.max(1, Math.ceil(totalVolunteers / PAGE_SIZE))
 
   const canImport = hasGlobalPermission(user, PERMISSIONS.VOLUNTEER_IMPORT)
   const canManageFields = hasGlobalPermission(user, PERMISSIONS.FIELD_MANAGE)
@@ -78,7 +90,7 @@ export default async function VolunteersPage({
       )}
 
       <Card>
-        <CardHeader title={`Danh sách (${volunteers.length})`} />
+        <CardHeader title={`Danh sách (${totalVolunteers})`} />
         <CardBody className="space-y-2">
           {volunteers.length === 0 ? (
             <EmptyState title="Không tìm thấy tình nguyện viên nào" />
@@ -103,6 +115,7 @@ export default async function VolunteersPage({
               </div>
             ))
           )}
+          <Pagination basePath="/admin/volunteers" page={page} totalPages={totalPages} searchParams={{ q }} />
         </CardBody>
       </Card>
 

@@ -5,7 +5,6 @@ import {
   ROLE_LABELS,
   MANAGER_GRANTABLE_PERMISSIONS,
   PERMISSION_LABELS,
-  hasGlobalPermission,
 } from '@/lib/permissions'
 import { CAMPAIGN_STATUS } from '@/lib/labels'
 import { CHAT_ACCESS_LABELS } from '@/lib/chat'
@@ -13,6 +12,7 @@ import { toDateTimeLocal } from '@/lib/utils'
 import { Card, CardHeader, CardBody } from '@/components/ui/card'
 import { Field, TextInput, TextArea, SelectInput, CheckboxInput } from '@/components/ui/field'
 import { SubmitButton } from '@/components/ui/submit-button'
+import { ConfirmDeleteForm } from '@/components/ui/confirm-delete-form'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { updateCampaign, updateCampaignStatus, deleteCampaign } from '@/actions/campaigns'
@@ -36,7 +36,10 @@ export default async function CampaignSettingsPage({ params }: { params: Promise
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader title="Trạng thái sự kiện" />
+        <CardHeader
+          title="Trạng thái sự kiện"
+          description={`Sự kiện đã xong việc? Chuyển sang "${CAMPAIGN_STATUS.ARCHIVED.label}" thay vì xoá — dữ liệu vẫn được giữ lại đầy đủ.`}
+        />
         <CardBody className="flex flex-wrap gap-2">
           {STATUS_FLOW.map((s) => (
             <form key={s} action={updateCampaignStatus.bind(null, id, s)}>
@@ -165,15 +168,14 @@ export default async function CampaignSettingsPage({ params }: { params: Promise
         </CardBody>
       </Card>
 
-      {hasGlobalPermission(scope.user, PERMISSIONS.CAMPAIGN_DELETE) && (
+      {scope.user.role === 'ROOT_ADMIN' && (
         <Card className="border-red-200">
-          <CardHeader title="Vùng nguy hiểm" />
+          <CardHeader
+            title="Vùng nguy hiểm"
+            description="Xoá vĩnh viễn xoá luôn toàn bộ đăng ký, giờ/điểm đã ghi, nhiệm vụ, ghi chú, chat của sự kiện — không thể hoàn tác. Chỉ Root Admin thấy mục này."
+          />
           <CardBody>
-            <form action={deleteCampaign.bind(null, id)}>
-              <SubmitButton variant="danger" pendingLabel="Đang xoá…">
-                Xoá sự kiện vĩnh viễn
-              </SubmitButton>
-            </form>
+            <ConfirmDeleteForm action={deleteCampaign.bind(null, id)} expectedText={c.title} submitLabel="Xoá sự kiện vĩnh viễn" />
           </CardBody>
         </Card>
       )}

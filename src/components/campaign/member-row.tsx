@@ -220,13 +220,23 @@ export function MemberRow({
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
           <span>Đăng ký lúc {formatDateTime(reg.appliedAt)}</span>
-          {canManage && reg.status !== 'REMOVED' && (
-            <form action={removeMember.bind(null, reg.id)}>
-              <SubmitButton variant="ghost" size="sm" pendingLabel="Đang loại…">
-                Loại khỏi sự kiện
-              </SubmitButton>
-            </form>
-          )}
+          <div className="flex items-center gap-3">
+            {canManage && reg.completed && (
+              <a
+                href={`/admin/campaigns/${reg.campaignId}/members/certificate?registrationId=${reg.id}`}
+                className="font-medium text-brand-600 hover:underline"
+              >
+                Xuất chứng nhận (PDF)
+              </a>
+            )}
+            {canManage && reg.status !== 'REMOVED' && (
+              <form action={removeMember.bind(null, reg.id)}>
+                <SubmitButton variant="ghost" size="sm" pendingLabel="Đang loại…">
+                  Loại khỏi sự kiện
+                </SubmitButton>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     </details>

@@ -6,16 +6,31 @@ import { AUDIT_LABELS } from '@/lib/audit'
 import { formatDateTime } from '@/lib/utils'
 import { PageHeader, Card, CardBody, EmptyState } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/avatar'
+import { Pagination } from '@/components/ui/pagination'
 
-export default async function AuditPage() {
+const PAGE_SIZE = 50
+
+export default async function AuditPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
   const user = await requireUser()
   if (user.role !== 'ROOT_ADMIN' && !hasGlobalPermission(user, PERMISSIONS.AUDIT_VIEW)) redirect('/403')
 
-  const logs = await prisma.auditLog.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-    include: { actor: true },
-  })
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, Number(pageParam) || 1)
+
+  const [logs, totalLogs] = await Promise.all([
+    prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: { actor: true },
+    }),
+    prisma.auditLog.count(),
+  ])
+  const totalPages = Math.max(1, Math.ceil(totalLogs / PAGE_SIZE))
 
   return (
     <div className="space-y-6">
@@ -38,6 +53,7 @@ export default async function AuditPage() {
               </div>
             ))
           )}
+          <Pagination basePath="/admin/audit" page={page} totalPages={totalPages} />
         </CardBody>
       </Card>
     </div>

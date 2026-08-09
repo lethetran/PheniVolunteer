@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import type { CampaignStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { assertPermission } from '@/lib/session'
+import { assertPermission, assertRoot } from '@/lib/session'
 import { assertCampaignScope } from '@/lib/scope'
 import { PERMISSIONS, CAMPAIGN_ADMIN_PERMISSIONS, MANAGER_GRANTABLE_PERMISSIONS } from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
@@ -124,8 +124,20 @@ export async function updateCampaignStatus(campaignId: string, status: CampaignS
   revalidatePath(`/campaigns/${scope.campaign.slug}`)
 }
 
-export async function deleteCampaign(campaignId: string) {
-  const user = await assertPermission(PERMISSIONS.CAMPAIGN_DELETE)
+/**
+ * Xoá vĩnh viễn — xoá cascade toàn bộ đăng ký, giờ/điểm đã ghi, nhiệm vụ, ghi chú,
+ * chat... của sự kiện. Chỉ Root Admin được phép, và phải gõ đúng tên sự kiện để
+ * xác nhận (kiểm tra lại ở server, không chỉ dựa vào việc khoá nút ở client).
+ * Với hầu hết trường hợp nên dùng "Lưu trữ" (đổi trạng thái ARCHIVED) thay vì xoá.
+ */
+export async function deleteCampaign(campaignId: string, formData: FormData) {
+  const user = await assertRoot()
+  const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId }, select: { title: true } })
+  const confirmTitle = str(formData, 'confirmTitle')
+  if (confirmTitle !== campaign.title) {
+    throw new Error('Tên sự kiện xác nhận không khớp — huỷ thao tác xoá.')
+  }
+
   await prisma.campaign.delete({ where: { id: campaignId } })
   await logAudit(user.id, 'campaign.delete', { entityType: 'Campaign', entityId: campaignId })
   revalidatePath('/admin/campaigns')
