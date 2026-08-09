@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pheni
+      POSTGRES_PASSWORD: pheni
+      POSTGRES_DB: pheni_volunteer
+    ports:
+      - '5432:5432'
+    volumes:
+      - pheni_db_data:/var/lib/postgresql/data
+
+volumes:
+  pheni_db_data:
