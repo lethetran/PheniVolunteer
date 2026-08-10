@@ -4,10 +4,16 @@ import type { Role } from '@prisma/client'
  * Một bộ từ vựng quyền duy nhất cho cả hệ thống.
  *
  *  - ROOT_ADMIN : mặc định có TẤT CẢ quyền, không cần cấp.
- *  - ADMIN      : Root cấp quyền toàn hệ thống (User.permissions) -> áp dụng mọi chiến dịch.
+ *  - ADMIN      : Root cấp quyền toàn hệ thống (User.permissions, xem `GLOBAL_GRANTABLE_PERMISSIONS`)
+ *                 -> KHÔNG áp dụng cho bất kỳ sự kiện cụ thể nào. Muốn thao tác trên 1 sự
+ *                 kiện, Admin phải được thêm làm CampaignAdmin riêng cho sự kiện đó.
  *  - MANAGER    : Admin cấp quyền cho từng nhóm nhỏ (GroupAssignment.permissions)
  *                 hoặc cho cả 1 chiến dịch (CampaignAdmin.permissions) -> chỉ trong phạm vi đó.
  *  - VOLUNTEER  : không có quyền quản trị.
+ *
+ * Xem `src/lib/scope.ts` (`CampaignScope.can()`) cho quyền theo sự kiện, và
+ * `hasGlobalPermission`/`assertPermission`/`requirePermission` trong `src/lib/session.ts`
+ * cho quyền toàn cục.
  */
 export const PERMISSIONS = {
   // Chiến dịch
@@ -38,7 +44,6 @@ export const PERMISSIONS = {
   // Dữ liệu & hệ thống
   DATA_EXPORT: 'data.export',
   MAIL_SEND: 'mail.send',
-  REPORT_VIEW: 'report.view',
   AUDIT_VIEW: 'audit.view',
   USER_MANAGE: 'user.manage',
 } as const
@@ -65,7 +70,6 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'volunteer.import': 'Nhập danh sách từ Excel',
   'data.export': 'Xuất dữ liệu ra Excel',
   'mail.send': 'Gửi email thông báo hàng loạt',
-  'report.view': 'Xem báo cáo tổng hợp',
   'audit.view': 'Xem lịch sử hoạt động hệ thống',
   'user.manage': 'Quản lý tài khoản & cấp quyền admin',
 }
@@ -84,10 +88,27 @@ export const GLOBAL_ONLY_PERMISSIONS: Permission[] = [
 
 export const ALL_PERMISSIONS = Object.values(PERMISSIONS) as Permission[]
 
-/** Bộ quyền Root có thể cấp cho một Admin. Xoá cứng sự kiện luôn là đặc quyền riêng của Root, không cấp được. */
-export const ADMIN_GRANTABLE_PERMISSIONS = ALL_PERMISSIONS.filter(
-  (p) => p !== PERMISSIONS.USER_MANAGE && p !== PERMISSIONS.CAMPAIGN_DELETE,
-)
+/**
+ * Bộ quyền Root có thể cấp cho một Admin ở trang /admin/users — CHỈ gồm các quyền
+ * thực sự được `hasGlobalPermission`/`assertPermission`/`requirePermission` xét tới
+ * (xem `src/lib/session.ts`). Các quyền còn lại (campaign.edit, member.manage,
+ * task.manage...) chỉ có hiệu lực khi cấp theo TỪNG sự kiện qua CampaignAdmin —
+ * cấp ở đây sẽ không có tác dụng gì nên KHÔNG đưa vào danh sách này (xem
+ * `CAMPAIGN_ADMIN_PERMISSIONS`/`MANAGER_GRANTABLE_PERMISSIONS` cho việc đó).
+ * campaign.create luôn giữ trong danh sách này (dù cũng được set mặc định lúc tạo
+ * Admin) để tránh trường hợp Root sửa 1 quyền khác qua form thì campaign.create bị
+ * âm thầm mất do form không có ô tick cho nó.
+ */
+export const GLOBAL_GRANTABLE_PERMISSIONS: Permission[] = [
+  PERMISSIONS.CAMPAIGN_CREATE,
+  PERMISSIONS.VOLUNTEER_VIEW,
+  PERMISSIONS.VOLUNTEER_EDIT,
+  PERMISSIONS.VOLUNTEER_IMPORT,
+  PERMISSIONS.FIELD_MANAGE, // chỉ có tác dụng toàn cục với cột hồ sơ TNV (VOLUNTEER_PROFILE)
+  PERMISSIONS.POST_MANAGE, // chỉ có tác dụng toàn cục với thông báo hệ thống (campaignId = null)
+  PERMISSIONS.MAIL_SEND,
+  PERMISSIONS.AUDIT_VIEW,
+]
 
 /** Bộ quyền Admin có thể cấp cho quản lý nhóm / quản lý chiến dịch. */
 export const MANAGER_GRANTABLE_PERMISSIONS = ALL_PERMISSIONS.filter(
@@ -104,24 +125,14 @@ export const CAMPAIGN_ADMIN_PERMISSIONS = ALL_PERMISSIONS.filter(
   (p) => !GLOBAL_ONLY_PERMISSIONS.includes(p),
 )
 
-/** Bộ quyền gợi ý khi cấp nhanh cho một Admin mới. */
+/**
+ * Bộ quyền TOÀN CỤC gợi ý khi cấp nhanh cho một Admin mới (xem `GLOBAL_GRANTABLE_PERMISSIONS`
+ * — quyền theo từng sự kiện như campaign.edit/member.manage... không thuộc về đây, Admin
+ * cần được thêm làm CampaignAdmin riêng cho từng sự kiện muốn phụ trách).
+ */
 export const DEFAULT_ADMIN_PERMISSIONS: Permission[] = [
   PERMISSIONS.CAMPAIGN_CREATE,
-  PERMISSIONS.CAMPAIGN_EDIT,
-  PERMISSIONS.CAMPAIGN_PUBLISH,
-  PERMISSIONS.GROUP_MANAGE,
-  PERMISSIONS.MANAGER_ASSIGN,
-  PERMISSIONS.REGISTRATION_REVIEW,
-  PERMISSIONS.MEMBER_MANAGE,
-  PERMISSIONS.ATTENDANCE_MANAGE,
-  PERMISSIONS.FIELD_MANAGE,
-  PERMISSIONS.TASK_MANAGE,
-  PERMISSIONS.TASK_REVIEW,
-  PERMISSIONS.NOTE_MANAGE,
-  PERMISSIONS.POST_MANAGE,
   PERMISSIONS.VOLUNTEER_VIEW,
-  PERMISSIONS.DATA_EXPORT,
-  PERMISSIONS.REPORT_VIEW,
 ]
 
 /** Bộ quyền gợi ý cho trưởng nhóm nhỏ. */

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import {
   ROLE_LABELS,
   ROLE_ORDER,
-  ADMIN_GRANTABLE_PERMISSIONS,
+  GLOBAL_GRANTABLE_PERMISSIONS,
   PERMISSION_LABELS,
 } from '@/lib/permissions'
 import { ROLE_TONE, USER_STATUS } from '@/lib/labels'
@@ -83,9 +83,14 @@ export default async function AdminUsersPage() {
               {u.role === 'ADMIN' && (
                 <details className="border-t border-slate-100 pt-3">
                   <summary className="cursor-pointer text-xs font-medium text-brand-600">Cấp quyền chi tiết</summary>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Đây là quyền <strong>toàn hệ thống</strong>, không liên quan tới sự kiện cụ thể nào. Muốn{' '}
+                    {u.name ?? u.email} phụ trách 1 sự kiện, vào trang <em>Cài đặt</em> của sự kiện đó và thêm họ làm
+                    admin phụ trách riêng.
+                  </p>
                   <form action={setUserPermissions.bind(null, u.id)} className="mt-3 space-y-3">
                     <div className="grid gap-1.5 sm:grid-cols-2">
-                      {ADMIN_GRANTABLE_PERMISSIONS.map((p) => (
+                      {GLOBAL_GRANTABLE_PERMISSIONS.map((p) => (
                         <CheckboxInput
                           key={p}
                           name="permissions"

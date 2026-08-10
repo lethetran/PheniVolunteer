@@ -18,9 +18,16 @@ export async function markNotificationsRead() {
   revalidatePath('/notifications')
 }
 
-/** Gửi thông báo/email tuỳ chỉnh tới các thành viên đang được tick chọn trên trang Thành viên. */
+/**
+ * Gửi thông báo/email tuỳ chỉnh tới các thành viên đang được tick chọn trên trang Thành
+ * viên. Dùng chung nút + checkbox với `bulkAssignGroup` nên xét quyền theo đúng cách
+ * `bulkAssignGroup` đang làm (MEMBER_MANAGE, campaign-wide hoặc theo từng nhóm mình phụ
+ * trách) để khớp với điều kiện hiện nút ở UI (`canBulkAssign`/`managedGroups` trong
+ * `src/app/admin/campaigns/[id]/members/page.tsx`).
+ */
 export async function sendBulkNotification(campaignId: string, formData: FormData) {
   const scope = await assertCampaignScope(campaignId)
+  if (!scope.canAnywhere(PERMISSIONS.MEMBER_MANAGE)) scope.assert(PERMISSIONS.MEMBER_MANAGE)
 
   const ids = formData.getAll('registrationIds').map(String).filter(Boolean)
   if (ids.length === 0) throw new Error('Chưa chọn thành viên nào để gửi thông báo.')

@@ -5,12 +5,12 @@ import type { Role, UserStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { assertRoot } from '@/lib/session'
 import { isAllowedEmail, provisionUserByEmail } from '@/lib/auth'
-import { ADMIN_GRANTABLE_PERMISSIONS, DEFAULT_ADMIN_PERMISSIONS, type Permission } from '@/lib/permissions'
+import { GLOBAL_GRANTABLE_PERMISSIONS, DEFAULT_ADMIN_PERMISSIONS, type Permission } from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
 import { str } from '@/lib/utils'
 import { notify } from '@/lib/notify'
 
-const GRANTABLE = new Set<Permission>(ADMIN_GRANTABLE_PERMISSIONS)
+const GRANTABLE = new Set<Permission>(GLOBAL_GRANTABLE_PERMISSIONS)
 
 export async function createAdmin(formData: FormData) {
   const actor = await assertRoot()

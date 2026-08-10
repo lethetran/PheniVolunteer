@@ -30,11 +30,15 @@ export default async function CampaignRosterPage({
   if (campaign.status === 'DRAFT' && !scope?.isStaff) notFound()
 
   const search = q?.trim()
-  const showAll = status === 'all'
+  // Người ngoài (không phải admin/trưởng nhóm của sự kiện này) chỉ được xem thành viên
+  // ĐÃ DUYỆT — không được lợi dụng ?status= để dò danh sách bị từ chối/chờ duyệt/loại.
+  const isStaff = scope?.isStaff ?? false
+  const requestedStatus = status && status in REGISTRATION_STATUS ? (status as RegistrationStatus) : undefined
+  const showAll = isStaff && status === 'all'
   const statusFilter: RegistrationStatus | undefined = showAll
     ? undefined
-    : status && status in REGISTRATION_STATUS
-      ? (status as RegistrationStatus)
+    : isStaff && requestedStatus
+      ? requestedStatus
       : 'APPROVED'
 
   const [admins, groups, members] = await Promise.all([
@@ -123,10 +127,12 @@ export default async function CampaignRosterPage({
         <CardBody className="space-y-3">
           <form method="GET" className="flex flex-wrap items-center gap-2">
             <TextInput name="q" defaultValue={q ?? ''} placeholder="Tìm theo tên, email, MSSV…" className="w-56" />
-            <AutoSubmitSelect name="status" defaultValue={showAll ? 'all' : 'APPROVED'}>
-              <option value="APPROVED">Đã duyệt</option>
-              <option value="all">Tất cả</option>
-            </AutoSubmitSelect>
+            {isStaff && (
+              <AutoSubmitSelect name="status" defaultValue={showAll ? 'all' : 'APPROVED'}>
+                <option value="APPROVED">Đã duyệt</option>
+                <option value="all">Tất cả</option>
+              </AutoSubmitSelect>
+            )}
             <SubmitButton variant="outline" size="sm" pendingLabel="Đang tìm…">
               Tìm
             </SubmitButton>
