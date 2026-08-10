@@ -44,6 +44,16 @@ export async function setUserRole(userId: string, formData: FormData) {
   if (userId === actor.id && role !== 'ROOT_ADMIN') {
     throw new Error('Bạn không thể tự hạ quyền của chính mình.')
   }
+  // "Quản lý nhóm" (MANAGER) không có ý nghĩa gì nếu gán tay ở đây — vai trò này chỉ
+  // có tác dụng khi gắn với 1 nhóm/sự kiện cụ thể, và được hệ thống tự gán/gỡ khi
+  // admin sự kiện cử/gỡ trưởng nhóm (xem assignGroupLeader/demoteIfNoAssignmentsLeft
+  // trong src/actions/groups.ts). Vẫn cho phép giữ nguyên nếu người này đã là MANAGER.
+  const current = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { role: true } })
+  if (role === 'MANAGER' && current.role !== 'MANAGER') {
+    throw new Error(
+      'Không thể gán tay vai trò "Quản lý nhóm" — hãy vào Cài đặt của sự kiện/nhóm cụ thể và cử người này làm trưởng nhóm hoặc admin phụ trách.',
+    )
+  }
 
   await prisma.user.update({
     where: { id: userId },

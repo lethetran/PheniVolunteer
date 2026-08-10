@@ -58,25 +58,37 @@ export default async function AdminUsersPage() {
               </div>
 
               {u.id !== actor.id && u.role !== 'ROOT_ADMIN' && (
-                <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
-                  <form action={setUserRole.bind(null, u.id)} className="flex items-center gap-2">
-                    <SelectInput name="role" defaultValue={u.role} className="w-40">
-                      {(['ADMIN', 'MANAGER', 'VOLUNTEER'] as Role[]).map((r) => (
-                        <option key={r} value={r}>
-                          {ROLE_LABELS[r]}
-                        </option>
-                      ))}
-                    </SelectInput>
-                    <SubmitButton size="sm" variant="outline" pendingLabel="Đang đổi…">
-                      Đổi vai trò
-                    </SubmitButton>
-                  </form>
+                <div className="border-t border-slate-100 pt-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <form action={setUserRole.bind(null, u.id)} className="flex items-center gap-2">
+                      <SelectInput name="role" defaultValue={u.role} className="w-40">
+                        {(['ADMIN', 'MANAGER', 'VOLUNTEER'] as Role[])
+                          .filter((r) => r !== 'MANAGER' || u.role === 'MANAGER')
+                          .map((r) => (
+                            <option key={r} value={r} disabled={r === 'MANAGER'}>
+                              {ROLE_LABELS[r]}
+                            </option>
+                          ))}
+                      </SelectInput>
+                      <SubmitButton size="sm" variant="outline" pendingLabel="Đang đổi…">
+                        Đổi vai trò
+                      </SubmitButton>
+                    </form>
 
-                  <form action={setUserStatus.bind(null, u.id, (u.status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE') as UserStatus)}>
-                    <SubmitButton variant={u.status === 'ACTIVE' ? 'danger' : 'outline'} size="sm" pendingLabel="Đang lưu…">
-                      {u.status === 'ACTIVE' ? 'Khoá tài khoản' : 'Mở khoá'}
-                    </SubmitButton>
-                  </form>
+                    <form action={setUserStatus.bind(null, u.id, (u.status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE') as UserStatus)}>
+                      <SubmitButton variant={u.status === 'ACTIVE' ? 'danger' : 'outline'} size="sm" pendingLabel="Đang lưu…">
+                        {u.status === 'ACTIVE' ? 'Khoá tài khoản' : 'Mở khoá'}
+                      </SubmitButton>
+                    </form>
+                  </div>
+                  {u.role === 'MANAGER' && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Vai trò <strong>Quản lý nhóm</strong> được hệ thống tự gán khi {u.name ?? u.email} được cử
+                      làm trưởng nhóm/admin phụ trách 1 sự kiện, và tự gỡ khi không còn phụ trách nhóm/sự kiện
+                      nào — không gán tay được ở đây. Muốn gỡ hẳn quyền của họ, vào Cài đặt của từng sự kiện/nhóm
+                      liên quan.
+                    </p>
+                  )}
                 </div>
               )}
 

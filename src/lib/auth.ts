@@ -38,6 +38,35 @@ function deriveStudentCode(email: string): string | null {
   return /^\d{6,12}$/.test(localPart) ? localPart : null
 }
 
+/** Tên tạm coi là "chưa có tên thật" nếu trống hoặc chỉ là MSSV/phần trước @ (xem provisionUserByEmail). */
+function looksLikePlaceholderName(name: string | null | undefined, email: string): boolean {
+  if (!name) return true
+  if (name === email.split('@')[0]) return true
+  return /^\d{6,12}$/.test(name)
+}
+
+/**
+ * Giải mã phần payload của id_token (JWT) mà không xác thực chữ ký — id_token này do
+ * chính thư viện NextAuth đã xác thực khi trao đổi mã OAuth, ta chỉ đọc lại claims đã
+ * có sẵn (name/picture) để dùng làm nguồn dự phòng khi tham số `profile` của event bị
+ * thiếu (từng gặp trường hợp `profile` rỗng khi liên kết tài khoản Google vào 1 user
+ * "chờ" đã được tạo sẵn qua provisionUserByEmail).
+ */
+function decodeIdTokenClaims(idToken?: string | null): { name?: string; picture?: string } {
+  if (!idToken) return {}
+  try {
+    const payload = idToken.split('.')[1]
+    if (!payload) return {}
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+    return {
+      name: typeof claims?.name === 'string' ? claims.name : undefined,
+      picture: typeof claims?.picture === 'string' ? claims.picture : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
 /**
  * Tạo sẵn tài khoản "chờ" cho một email chưa từng đăng nhập, để Admin/Root có thể
  * cấp quyền (trưởng nhóm, admin sự kiện...) trước khi người đó đăng nhập lần đầu.
@@ -148,7 +177,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   events: {
-    async signIn({ user, profile }) {
+    async signIn({ user, account, profile }) {
       if (!user.email) return
       const email = user.email.toLowerCase()
       const isRoot = rootAdminEmails().includes(email)
@@ -156,11 +185,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         where: { email },
         select: { name: true, studentCode: true },
       })
-      const placeholderName = email.split('@')[0]
-      // Tên/ảnh thật từ Google — chỉ ghi đè nếu tên hiện tại còn trống hoặc chỉ là
-      // tên tạm được đoán từ email lúc cấp quyền trước (xem provisionUserByEmail).
-      const realName = typeof profile?.name === 'string' ? profile.name : undefined
-      const realImage = typeof profile?.picture === 'string' ? profile.picture : undefined
+      // `profile` đôi khi rỗng ở bước liên kết tài khoản Google vào 1 user "chờ" đã
+      // được tạo sẵn (xem provisionUserByEmail) — dự phòng bằng cách tự giải mã
+      // id_token (đã được NextAuth xác thực) để không bị kẹt tên tạm/không có ảnh.
+      const fromIdToken =
+        account?.provider === 'google' ? decodeIdTokenClaims(account.id_token) : {}
+      const realName =
+        (typeof profile?.name === 'string' ? profile.name : undefined) ?? fromIdToken.name
+      const realImage =
+        (typeof profile?.picture === 'string' ? profile.picture : undefined) ?? fromIdToken.picture
 
       await prisma.user
         .update({
@@ -169,7 +202,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             lastLoginAt: new Date(),
             emailVerified: new Date(),
             ...(isRoot ? { role: 'ROOT_ADMIN' as const, status: 'ACTIVE' as const } : {}),
-            ...(realName && (!current?.name || current.name === placeholderName) ? { name: realName } : {}),
+            ...(realName && looksLikePlaceholderName(current?.name, email) ? { name: realName } : {}),
             ...(realImage ? { image: realImage } : {}),
             ...(!current?.studentCode && deriveStudentCode(email) ? { studentCode: deriveStudentCode(email) } : {}),
           },
