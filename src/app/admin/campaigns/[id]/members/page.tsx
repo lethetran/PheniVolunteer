@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { LinkButton } from '@/components/ui/button'
 import { SubmitButton } from '@/components/ui/submit-button'
 import { SelectInput, TextInput } from '@/components/ui/field'
+import { AutoSubmitSelect } from '@/components/ui/auto-submit-select'
 import { MemberRow, MemberTableHeader } from '@/components/campaign/member-row'
 import { ImportJobList } from '@/components/campaign/import-job-list'
 import { importCampaignMembers, importApprovalDecisions } from '@/actions/import'
@@ -140,7 +141,7 @@ export default async function CampaignMembersPage({
             {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
             <TextInput name="q" defaultValue={q ?? ''} placeholder="Tìm theo tên, email, MSSV…" className="w-56" />
             {groups.length > 0 && (
-              <SelectInput name="groupId" defaultValue={groupFilter ?? ''} className="w-48">
+              <AutoSubmitSelect name="groupId" defaultValue={groupFilter ?? ''} className="w-48">
                 <option value="">Tất cả nhóm</option>
                 <option value="none">Chưa xếp nhóm</option>
                 {groups.map((g) => (
@@ -148,7 +149,7 @@ export default async function CampaignMembersPage({
                     {g.name}
                   </option>
                 ))}
-              </SelectInput>
+              </AutoSubmitSelect>
             )}
             <span className="flex items-center gap-1 text-xs text-slate-500">
               STT

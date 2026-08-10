@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardBody, PageHeader, EmptyState } from '@/components/ui/card'
 import { TextInput } from '@/components/ui/field'
+import { AutoSubmitSelect } from '@/components/ui/auto-submit-select'
 import { SubmitButton } from '@/components/ui/submit-button'
 import type { RegistrationStatus } from '@prisma/client'
 
@@ -122,10 +123,10 @@ export default async function CampaignRosterPage({
         <CardBody className="space-y-3">
           <form method="GET" className="flex flex-wrap items-center gap-2">
             <TextInput name="q" defaultValue={q ?? ''} placeholder="Tìm theo tên, email, MSSV…" className="w-56" />
-            <select name="status" defaultValue={showAll ? 'all' : 'APPROVED'} className="rounded-lg border-0 bg-white px-3 py-2 text-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-brand-600">
+            <AutoSubmitSelect name="status" defaultValue={showAll ? 'all' : 'APPROVED'}>
               <option value="APPROVED">Đã duyệt</option>
               <option value="all">Tất cả</option>
-            </select>
+            </AutoSubmitSelect>
             <SubmitButton variant="outline" size="sm" pendingLabel="Đang tìm…">
               Tìm
             </SubmitButton>
